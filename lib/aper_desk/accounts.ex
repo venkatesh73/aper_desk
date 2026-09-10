@@ -389,6 +389,23 @@ defmodule AperDesk.Accounts do
     end
   end
 
+  @doc """
+  Finish first-run setup.
+
+  Owner-only: currency and time zone change how every existing quote, invoice
+  and shoot is read, so this is not a setting a photographer seat should be able
+  to change on everyone else's behalf.
+  """
+  def complete_setup(%Scope{} = scope, attrs) do
+    with :ok <- Authorization.authorize(scope, :"studio.write") do
+      scope.studio |> Studio.setup_changeset(attrs) |> Repo.update()
+    end
+  end
+
+  @doc "Whether the studio still needs first-run setup."
+  def needs_setup?(%Scope{studio: %Studio{} = studio}), do: not Studio.configured?(studio)
+  def needs_setup?(%Scope{}), do: false
+
   @doc "Every studio the user holds an active seat in, for the studio switcher."
   def list_studios_for_user(%User{} = user) do
     Repo.all(

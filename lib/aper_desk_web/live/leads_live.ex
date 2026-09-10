@@ -14,8 +14,8 @@ defmodule AperDeskWeb.LeadsLive do
 
   alias AperDesk.Crm
   alias AperDesk.Crm.Lead
+  alias AperDesk.Formats
   alias AperDesk.Money
-  alias AperDeskWeb.Graphql.Resolvers.Helpers
 
   @board_stages ~w(new contacted consult quote_sent booked)
 
@@ -119,7 +119,8 @@ defmodule AperDeskWeb.LeadsLive do
     end
   end
 
-  def date_label(lead), do: Helpers.date_label(lead.desired_date)
+  @doc "The shoot date, in the studio's own format."
+  def date_label(scope, lead), do: Formats.relative_date(scope, lead.desired_date)
 
   def overdue?(lead), do: Lead.overdue?(lead, DateTime.utc_now())
 

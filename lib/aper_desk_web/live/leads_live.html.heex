@@ -52,7 +52,9 @@
             <b>{display_name(lead)}</b>
             <span class="sub">{lead.title}</span>
             <div class="kv">
-              <span :if={date_label(lead)} class="mono">{date_label(lead)}</span>
+              <span :if={date_label(@current_scope, lead)} class="mono">
+                {date_label(@current_scope, lead)}
+              </span>
               <span :if={value(lead)}>{value(lead)}</span>
             </div>
             <div class="kv">
@@ -94,7 +96,7 @@
                 <span :if={overdue?(lead)} class="pill bad" style="margin-left:6px">overdue</span>
               </td>
               <td>{String.replace(lead.shoot_type, "_", " ")}</td>
-              <td class="mono">{date_label(lead) || "—"}</td>
+              <td class="mono">{date_label(@current_scope, lead) || "—"}</td>
               <td>{humanise(lead.stage)}</td>
               <td>{value(lead) || "—"}</td>
               <td>{(lead.owner && lead.owner.name) || "Unassigned"}</td>

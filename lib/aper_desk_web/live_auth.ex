@@ -18,7 +18,39 @@ defmodule AperDeskWeb.LiveAuth do
   alias AperDesk.Scope
   alias AperDeskWeb.Layouts
 
+  @doc """
+  Mount hooks.
+
+  `:require_scope` gives a signed-in scope and sends the caller to first-run
+  setup until the studio is configured — a studio that has not said which
+  currency it reports in, or which zone its shoots are in, cannot be shown a
+  meaningful dashboard, because every figure on it would be a guess.
+
+  `:require_scope_only` is the same without that redirect, for the setup screen.
+  `:allow_anonymous` falls back to a public scope instead of redirecting.
+  """
   def on_mount(:require_scope, _params, session, socket) do
+    case scope_from_session(session) do
+      {:ok, scope} ->
+        socket = assign(socket, current_scope: scope)
+
+        if Accounts.needs_setup?(scope) do
+          {:halt, redirect(socket, to: "/app/setup")}
+        else
+          {:cont, socket}
+        end
+
+      :error ->
+        {:halt,
+         socket
+         |> put_flash(:error, "Please sign in to continue.")
+         |> redirect(to: "/sign-in")}
+    end
+  end
+
+  # `:require_scope_only` is the same, minus the setup redirect. The setup screen
+  # itself mounts with this, or it would redirect to itself forever.
+  def on_mount(:require_scope_only, _params, session, socket) do
     case scope_from_session(session) do
       {:ok, scope} ->
         {:cont, assign(socket, current_scope: scope)}

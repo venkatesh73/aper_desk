@@ -35,6 +35,22 @@ defmodule AperDesk.Fixtures do
         )
       )
 
+    # Studios come back through first-run setup already, because almost no test
+    # is about that gate and every one of them would otherwise be redirected to
+    # it. Pass `configured: false` to get a studio that still needs setting up.
+    studio =
+      if Map.get(attrs, :configured, true) do
+        studio
+        |> Ecto.Changeset.change(
+          setup_completed_at: DateTime.utc_now(),
+          city: "Zurich",
+          country_code: "CH"
+        )
+        |> Repo.update!()
+      else
+        studio
+      end
+
     {:ok, scope} = Accounts.scope_for(user, studio.id)
     %{user: user, studio: studio, scope: scope}
   end

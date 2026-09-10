@@ -53,6 +53,11 @@ defmodule AperDeskWeb.Router do
   scope "/app", AperDeskWeb do
     pipe_through [:browser, :authenticated, :require_auth]
 
+    # Its own session: the setup screen must not redirect to itself.
+    live_session :setup, on_mount: {AperDeskWeb.LiveAuth, :require_scope_only} do
+      live "/setup", SetupLive, :index
+    end
+
     live_session :app, on_mount: {AperDeskWeb.LiveAuth, :require_scope} do
       live "/", DashboardLive, :index
       live "/leads", LeadsLive, :index

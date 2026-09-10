@@ -88,6 +88,12 @@
 
 /* Server-rendered flash messages, styled with the design tokens. */
 .flash-group{position:fixed;top:16px;right:16px;z-index:80;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 32px))}
+
+/* The connection banners are rendered hidden and revealed by LiveView when the
+   socket drops. `.flash{display:flex}` beats the user agent's `[hidden]` rule
+   on specificity, so without this they show on every page load — telling a
+   visitor the server is unreachable while they are looking at it. */
+.flash[hidden]{display:none}
 .flash{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);font-size:13px}
 .flash b{display:block;margin-bottom:2px}
 .flash.info{border-color:var(--ok);background:var(--ok-soft)}

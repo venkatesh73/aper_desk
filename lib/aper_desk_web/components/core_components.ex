@@ -58,6 +58,27 @@ defmodule AperDeskWeb.CoreComponents do
   end
 
   @doc """
+  Validation errors for one form field, in the design system's style.
+
+  Separate from the generated `error/1`, which carries daisyUI classes this
+  application does not load.
+  """
+  attr :field, Phoenix.HTML.FormField, required: true
+
+  def errors(assigns) do
+    ~H"""
+    <span :for={message <- field_errors(@field)} class="fe">{message}</span>
+    """
+  end
+
+  defp field_errors(%Phoenix.HTML.FormField{errors: errors, form: %{source: %{action: action}}})
+       when not is_nil(action) do
+    Enum.map(errors, &translate_error/1)
+  end
+
+  defp field_errors(_field), do: []
+
+  @doc """
   Renders flash notices.
 
   ## Examples

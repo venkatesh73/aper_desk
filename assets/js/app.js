@@ -25,11 +25,27 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/aper_desk"
 import topbar from "../vendor/topbar"
 
+// Tells the setup screen which time zone the browser is in, so a new studio is
+// not asked to find its own city in a dropdown. The server validates the value
+// and ignores it if a zone has already been chosen.
+const hooks = {
+  DetectTimeZone: {
+    mounted() {
+      try {
+        const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+        if (zone) this.pushEvent("detected-timezone", {time_zone: zone})
+      } catch (_e) {
+        // No Intl support: the visitor picks from the list instead.
+      }
+    }
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, ...hooks},
 })
 
 // Show progress bar on live navigation and form submits

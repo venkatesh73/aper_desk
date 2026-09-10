@@ -1,0 +1,124 @@
+<Layouts.app flash={@flash}>
+  <div class="authwrap" id="setup" phx-hook="DetectTimeZone">
+    <div class="authcard" style="max-width:560px">
+      <a class="brand" href={~p"/"} style="margin-bottom:18px">
+        <img src={~p"/images/logo-long.png"} alt="AperDesk" width="132" height="44" />
+      </a>
+
+      <h1 class="serif">Set up {@studio.name}</h1>
+      <p class="sub">
+        A few things we cannot guess. Currency and time zone decide how every quote and shoot is
+        read, so they are worth a moment now.
+      </p>
+
+      <.form for={@form} phx-change="validate" phx-submit="save">
+        <label for="setup_city">Where are you based?</label>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+          <input
+            type="text"
+            id="setup_city"
+            name="setup[city]"
+            value={@form[:city].value}
+            placeholder="City"
+            autocomplete="address-level2"
+            required
+          />
+          <input
+            type="text"
+            id="setup_country_code"
+            name="setup[country_code]"
+            value={@form[:country_code].value}
+            placeholder="CH"
+            maxlength="2"
+            style="text-transform:uppercase"
+            autocomplete="country"
+            required
+          />
+        </div>
+        <.errors field={@form[:city]} />
+        <.errors field={@form[:country_code]} />
+
+        <label for="setup_time_zone">Time zone</label>
+        <select id="setup_time_zone" name="setup[time_zone]" required>
+          <option
+            :for={zone <- @time_zones}
+            value={zone}
+            selected={zone == @form[:time_zone].value}
+          >
+            {String.replace(zone, "_", " ")}
+          </option>
+        </select>
+        <span class="formhint">Shoot times and reply targets are shown in this zone.</span>
+        <.errors field={@form[:time_zone]} />
+
+        <label for="setup_base_currency">Reporting currency</label>
+        <select id="setup_base_currency" name="setup[base_currency]" required>
+          <option
+            :for={code <- @currencies}
+            value={code}
+            selected={code == @form[:base_currency].value}
+          >
+            {code}
+          </option>
+        </select>
+        <span class="formhint">
+          You can still quote clients in another currency. This is the one your reports total in.
+        </span>
+        <.errors field={@form[:base_currency]} />
+
+        <label for="setup_date_format">Date format</label>
+        <select id="setup_date_format" name="setup[date_format]">
+          <option
+            :for={format <- Studio.date_formats()}
+            value={format}
+            selected={format == @form[:date_format].value}
+          >
+            {date_format_label(format)}
+          </option>
+        </select>
+
+        <label for="setup_time_format">Time format</label>
+        <select id="setup_time_format" name="setup[time_format]">
+          <option
+            :for={format <- Studio.time_formats()}
+            value={format}
+            selected={format == @form[:time_format].value}
+          >
+            {time_format_label(format)}
+          </option>
+        </select>
+
+        <label for="setup_week_starts_on">Weeks start on</label>
+        <select id="setup_week_starts_on" name="setup[week_starts_on]">
+          <option
+            :for={day <- Studio.week_starts()}
+            value={day}
+            selected={day == @form[:week_starts_on].value}
+          >
+            {week_start_label(day)}
+          </option>
+        </select>
+
+        <div class="hint" style="margin-top:12px">
+          Dates will look like <span class="mono">{@preview}</span>
+        </div>
+
+        <label for="setup_reply_sla_minutes">Reply to new enquiries</label>
+        <select id="setup_reply_sla_minutes" name="setup[reply_sla_minutes]">
+          <option
+            :for={{label, minutes} <- sla_options()}
+            value={minutes}
+            selected={to_string(minutes) == to_string(@form[:reply_sla_minutes].value)}
+          >
+            {label}
+          </option>
+        </select>
+        <span class="formhint">
+          The dashboard measures against this. Nothing is sent automatically.
+        </span>
+
+        <button type="submit" class="btn primary">Save and continue</button>
+      </.form>
+    </div>
+  </div>
+</Layouts.app>

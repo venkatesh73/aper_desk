@@ -42,44 +42,66 @@ defmodule AperDeskWeb.Layouts do
   end
 
   @doc """
-  Shows the flash group with standard titles and content.
+  Flash messages, styled with the design tokens.
 
-  ## Examples
+  Replaces the generated version, which emitted daisyUI classes this
+  application does not load — so a flash rendered as unstyled text at the foot
+  of the page instead of as a notice.
 
-      <.flash_group flash={@flash} />
+  The two connection banners are LiveView's own: they are hidden until the
+  socket reports itself disconnected, so a dropped connection says so rather
+  than leaving a page that has quietly stopped responding.
   """
-  attr :flash, :map, required: true, doc: "the map of flash messages"
-  attr :id, :string, default: "flash-group", doc: "the optional id of flash container"
+  attr :flash, :map, required: true
+  attr :id, :string, default: "flash-group"
 
   def flash_group(assigns) do
     ~H"""
-    <div id={@id} aria-live="polite">
-      <.flash kind={:info} flash={@flash} />
-      <.flash kind={:error} flash={@flash} />
+    <div id={@id} class="flash-group" aria-live="polite">
+      <.notice kind={:info} flash={@flash} />
+      <.notice kind={:error} flash={@flash} />
 
-      <.flash
+      <div
         id="client-error"
-        kind={:error}
-        title={gettext("We can't find the internet")}
-        phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
-        phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
+        class="flash error"
         hidden
+        phx-disconnected={JS.remove_attribute("hidden", to: "#client-error")}
+        phx-connected={JS.set_attribute({"hidden", ""}, to: "#client-error")}
       >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+        <span><b>We can't reach the server</b>Trying to reconnect…</span>
+      </div>
 
-      <.flash
+      <div
         id="server-error"
-        kind={:error}
-        title={gettext("Something went wrong!")}
-        phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
-        phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
+        class="flash error"
         hidden
+        phx-disconnected={JS.remove_attribute("hidden", to: "#server-error")}
+        phx-connected={JS.set_attribute({"hidden", ""}, to: "#server-error")}
       >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+        <span><b>Something went wrong</b>Trying to reconnect…</span>
+      </div>
+    </div>
+    """
+  end
+
+  attr :kind, :atom, required: true
+  attr :flash, :map, required: true
+
+  defp notice(assigns) do
+    assigns = assign(assigns, :message, Phoenix.Flash.get(assigns.flash, assigns.kind))
+
+    ~H"""
+    <div
+      :if={@message}
+      id={"flash-#{@kind}"}
+      class={["flash", to_string(@kind)]}
+      role={if @kind == :error, do: "alert", else: "status"}
+      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> JS.hide(to: "#flash-#{@kind}")}
+    >
+      <span>
+        <b>{if @kind == :error, do: "Something went wrong", else: "Done"}</b>{@message}
+      </span>
+      <button type="button" aria-label="Dismiss">&times;</button>
     </div>
     """
   end

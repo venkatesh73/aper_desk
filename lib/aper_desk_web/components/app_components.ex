@@ -26,11 +26,6 @@ defmodule AperDeskWeb.AppComponents do
         <img src={~p"/images/logo-long.png"} alt="AperDesk" width="120" height="40" />
       </a>
 
-      <div class="rolebox">
-        <span class="eyebrow">Signed in as</span>
-        <div style="font-weight:600;font-size:13px">{role_label(@current_scope.role)}</div>
-      </div>
-
       <a :for={item <- @items} class={["ni", @active == item.key && "on"]} href={item.path}>
         {Phoenix.HTML.raw(item.icon)}{item.label}
         <span :if={item[:badge]} class="n">{item.badge}</span>
@@ -39,8 +34,7 @@ defmodule AperDeskWeb.AppComponents do
       <div class="me">
         <span class="av">{initials(@current_scope)}</span>
         <span>
-          <b>{@current_scope.user && @current_scope.user.name}</b>{@current_scope.studio &&
-            @current_scope.studio.name}
+          <b>{@current_scope.user && @current_scope.user.name}</b>{studio_line(@current_scope)}
         </span>
         <span class="spacer"></span>
         <button
@@ -186,6 +180,13 @@ defmodule AperDeskWeb.AppComponents do
       is_nil(item.permission) or Authorization.can?(scope, item.permission)
     end)
   end
+
+  # The studio and the role in one line, since the sidebar footer is the only
+  # place either is shown now.
+  defp studio_line(%Scope{studio: nil}), do: "No studio"
+
+  defp studio_line(%Scope{studio: studio, role: role}),
+    do: "#{studio.name} · #{role_label(role)}"
 
   defp role_label(nil), do: "Signed out"
   defp role_label(:owner), do: "Studio owner"

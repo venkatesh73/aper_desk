@@ -13,7 +13,7 @@ defmodule AperDeskWeb.DashboardLive do
 
   import AperDeskWeb.AppComponents
 
-  alias AperDesk.{Billing, Crm, Finance, Money, Repo, Scope}
+  alias AperDesk.{Billing, Crm, Finance, Formats, Money, Repo, Scope}
   alias AperDeskWeb.Graphql.Resolvers.Helpers
 
   @impl true
@@ -54,7 +54,8 @@ defmodule AperDeskWeb.DashboardLive do
 
   defp subtitle(scope) do
     overdue = length(Crm.overdue_leads(scope))
-    today = Calendar.strftime(Date.utc_today(), "%a %-d %b %Y")
+    # The studio's own date format and time zone, not the server's.
+    today = Formats.date(scope, Formats.today_for(scope))
 
     case overdue do
       0 -> "#{today} · nothing is overdue"
@@ -155,7 +156,8 @@ defmodule AperDeskWeb.DashboardLive do
       %{
         id: job.id,
         title: job.title,
-        when: Helpers.date_label(job.starts_at),
+        when:
+          "#{Formats.relative_date(scope, job.starts_at)} · #{Formats.time(scope, job.starts_at)}",
         where: job.venue_name || job.city
       }
     end)
