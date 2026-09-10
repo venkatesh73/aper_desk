@@ -94,6 +94,10 @@
 .flash.error{border-color:var(--bad);background:var(--bad-soft)}
 .flash button{margin-left:auto;color:var(--faint);font-size:16px;line-height:1}
 
+/* Helper text under a form field. Not `.hint`, which design.css styles as a
+   bordered callout box and made this read like a second input. */
+.formhint{display:block;margin-top:5px;font-size:12px;color:var(--faint)}
+
 /* Field-level validation errors from Ecto changesets. */
 .fe{display:block;margin-top:4px;font-size:12px;color:var(--bad)}
 input.invalid,select.invalid,textarea.invalid{border-color:var(--bad)}

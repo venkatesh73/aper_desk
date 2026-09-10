@@ -1,0 +1,119 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:dashboard} />
+
+    <div class="main">
+      <.topbar title={@greeting} subtitle={@subtitle}>
+        <:actions>
+          <a class="btn primary" href={~p"/app/leads/new"}>+ New lead</a>
+        </:actions>
+      </.topbar>
+
+      <div class="stats">
+        <.stat :for={s <- @stats} label={s.label} value={s.value} detail={s.detail} tone={s.tone} />
+      </div>
+
+      <div class="dash">
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+          <div class="panel">
+            <div class="ph-head">
+              <h3>Needs attention</h3>
+              <span class="spacer"></span>
+              <a class="btn sm ghost" href={~p"/app/leads"}>All leads</a>
+            </div>
+            <div :if={@attention != []} class="list">
+              <div :for={item <- @attention} class="it">
+                <span class={["dot", item.tone]}></span>
+                <span>
+                  <b>{item.title}</b>
+                  <span class="sub">{item.detail}</span>
+                </span>
+                <span class="t">{item.trailing}</span>
+              </div>
+            </div>
+            <.empty
+              :if={@attention == []}
+              title="Nothing needs you right now"
+              body="Overdue replies and unpaid invoices will appear here."
+            />
+          </div>
+
+          <div class="panel">
+            <div class="ph-head">
+              <h3>Upcoming shoots</h3>
+              <span class="spacer"></span>
+              <a class="btn sm ghost" href={~p"/app/calendar"}>Calendar</a>
+            </div>
+            <div :if={@upcoming != []} class="list">
+              <div :for={job <- @upcoming} class="it">
+                <span class="dot"></span>
+                <span>
+                  <b>{job.title}</b>
+                  <span class="sub">{job.where}</span>
+                </span>
+                <span class="t">{job.when}</span>
+              </div>
+            </div>
+            <.empty
+              :if={@upcoming == []}
+              title="No shoots booked yet"
+              body="Confirmed shoots show up here with the date and venue."
+            />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+          <div :if={@usage} class="panel">
+            <div class="ph-head">
+              <h3>Your plan</h3>
+              <span class="spacer"></span>
+              <span class="pill">{@usage.plan.name}</span>
+            </div>
+            <div class="list">
+              <div
+                :for={meter <- Enum.filter(@usage.meters, &(&1.limit != :unlimited))}
+                class="it"
+              >
+                <span>
+                  <b>{meter_label(meter.key)}</b>
+                  <span class="sub">{meter_usage(meter)}</span>
+                </span>
+                <span class="spacer"></span>
+                <span class="t">{percent(meter.utilisation)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="ph-head">
+              <h3>Getting started</h3>
+            </div>
+            <div class="list">
+              <div class="it">
+                <span class="dot"></span>
+                <span>
+                  <b>Add your first package</b>
+                  <span class="sub">What you sell, and for how much</span>
+                </span>
+              </div>
+              <div class="it">
+                <span class="dot"></span>
+                <span>
+                  <b>Connect your inbox</b>
+                  <span class="sub">Forwarded enquiries become leads</span>
+                </span>
+              </div>
+              <div class="it">
+                <span class="dot"></span>
+                <span>
+                  <b>Invite your team</b>
+                  <span class="sub">Five roles, each with its own view</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layouts.app>

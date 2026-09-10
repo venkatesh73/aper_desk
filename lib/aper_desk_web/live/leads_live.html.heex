@@ -1,0 +1,107 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:leads} />
+
+    <div class="main">
+      <.topbar title="Leads" subtitle={"#{length(@leads)} in the pipeline"}>
+        <:actions>
+          <form phx-change="filter" phx-submit="filter">
+            <input
+              type="search"
+              name="query"
+              value={@query}
+              placeholder="Search leads"
+              autocomplete="off"
+            />
+          </form>
+          <div class="seg">
+            <button
+              :for={{value, label} <- [{"board", "Board"}, {"table", "Table"}]}
+              aria-pressed={to_string(@view == String.to_existing_atom(value))}
+              phx-click="set-view"
+              phx-value-view={value}
+            >
+              {label}
+            </button>
+          </div>
+          <a class="btn primary" href={~p"/app/leads/new"}>+ New lead</a>
+        </:actions>
+      </.topbar>
+
+      <.empty
+        :if={@denied}
+        title="You do not have access to leads"
+        body="Ask an owner to change your role if you need it."
+      />
+
+      <.empty
+        :if={not @denied and @leads == []}
+        title="No leads yet"
+        body="Forward an enquiry to your studio address, or add one by hand."
+      />
+
+      <div :if={not @denied and @leads != [] and @view == :board} class="kanban">
+        <div :for={column <- @columns} class="col">
+          <div class="rhead">
+            <b>{column.label}</b>
+            <span class="spacer"></span>
+            <span class="n">{length(column.leads)}</span>
+          </div>
+
+          <div :for={lead <- column.leads} class="kcard">
+            <b>{display_name(lead)}</b>
+            <span class="sub">{lead.title}</span>
+            <div class="kv">
+              <span :if={date_label(lead)} class="mono">{date_label(lead)}</span>
+              <span :if={value(lead)}>{value(lead)}</span>
+            </div>
+            <div class="kv">
+              <span class="pill">{String.replace(lead.shoot_type, "_", " ")}</span>
+              <span :if={overdue?(lead)} class="pill bad">overdue</span>
+              <span class="spacer"></span>
+              <button
+                :if={next_stage(lead)}
+                class="btn sm"
+                phx-click="move"
+                phx-value-id={lead.id}
+                phx-value-stage={next_stage(lead)}
+              >
+                → {humanise(next_stage(lead))}
+              </button>
+            </div>
+          </div>
+
+          <.empty :if={column.leads == []} title="Empty" />
+        </div>
+      </div>
+
+      <div :if={not @denied and @leads != [] and @view == :table} class="panel tablewrap">
+        <table class="cmpt">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Shoot</th>
+              <th>Date</th>
+              <th>Stage</th>
+              <th>Value</th>
+              <th>Owner</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={lead <- @leads}>
+              <td>
+                <b>{display_name(lead)}</b>
+                <span :if={overdue?(lead)} class="pill bad" style="margin-left:6px">overdue</span>
+              </td>
+              <td>{String.replace(lead.shoot_type, "_", " ")}</td>
+              <td class="mono">{date_label(lead) || "—"}</td>
+              <td>{humanise(lead.stage)}</td>
+              <td>{value(lead) || "—"}</td>
+              <td>{(lead.owner && lead.owner.name) || "Unassigned"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</Layouts.app>

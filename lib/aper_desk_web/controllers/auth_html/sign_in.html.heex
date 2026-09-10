@@ -1,0 +1,37 @@
+<div class="authwrap">
+  <div class="authcard">
+    <a class="brand" href={~p"/"} style="margin-bottom:18px">
+      <img src={~p"/images/logo-long.png"} alt="AperDesk" width="132" height="44" />
+    </a>
+
+    <h1 class="serif">Welcome back</h1>
+    <p class="sub">Sign in to your studio.</p>
+
+    <div :if={@error} class="fe" style="margin-bottom:12px">{@error}</div>
+
+    <.form :let={_f} for={%{}} action={~p"/sign-in"} as={:session}>
+      <label for="session_email">Email</label>
+      <input
+        type="email"
+        id="session_email"
+        name="session[email]"
+        value={@email}
+        autocomplete="email"
+        required
+      />
+
+      <label for="session_password">Password</label>
+      <input
+        type="password"
+        id="session_password"
+        name="session[password]"
+        autocomplete="current-password"
+        required
+      />
+
+      <button type="submit" class="btn primary">Sign in</button>
+    </.form>
+
+    <p class="alt">New here? <a href={~p"/sign-up"}>Start a free trial</a></p>
+  </div>
+</div>

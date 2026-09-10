@@ -9,7 +9,7 @@ defmodule AperDesk.Accounts do
 
   import Ecto.Query
 
-  alias AperDesk.Accounts.{Membership, Studio, User, UserInvitation, UserToken}
+  alias AperDesk.Accounts.{Membership, Registration, Studio, User, UserInvitation, UserToken}
   alias AperDesk.Authorization
   alias AperDesk.Repo
   alias AperDesk.Scope
@@ -42,6 +42,42 @@ defmodule AperDesk.Accounts do
   end
 
   def register_user(attrs), do: %User{} |> User.registration_changeset(attrs) |> Repo.insert()
+
+  @doc """
+  Register from the sign-up form.
+
+  Takes a `Registration` changeset and returns the same shape back on failure,
+  with database-level errors mapped onto the field the form actually shows. A
+  taken email surfaces on `:email`, a taken studio slug on `:studio_name` —
+  without this the caller would get a `User` or `Studio` changeset whose
+  `:name` error could belong to either field.
+  """
+  def register_studio(%Ecto.Changeset{} = form) do
+    if form.valid? do
+      case register_owner(Registration.user_attrs(form), Registration.studio_attrs(form)) do
+        {:ok, result} -> {:ok, result}
+        {:error, changeset} -> {:error, merge_registration_errors(form, changeset)}
+      end
+    else
+      {:error, %{form | action: :insert}}
+    end
+  end
+
+  defp merge_registration_errors(form, %Ecto.Changeset{data: %User{}} = changeset) do
+    Enum.reduce(changeset.errors, %{form | action: :insert}, fn
+      {:email, {message, opts}}, acc -> Ecto.Changeset.add_error(acc, :email, message, opts)
+      {_field, {message, opts}}, acc -> Ecto.Changeset.add_error(acc, :name, message, opts)
+    end)
+  end
+
+  defp merge_registration_errors(form, %Ecto.Changeset{data: %Studio{}} = changeset) do
+    Enum.reduce(changeset.errors, %{form | action: :insert}, fn {_field, {message, opts}}, acc ->
+      Ecto.Changeset.add_error(acc, :studio_name, message, opts)
+    end)
+  end
+
+  defp merge_registration_errors(form, _changeset),
+    do: Ecto.Changeset.add_error(%{form | action: :insert}, :name, "could not be created")
 
   def change_user_registration(user \\ %User{}, attrs \\ %{}),
     do: User.registration_changeset(user, attrs)

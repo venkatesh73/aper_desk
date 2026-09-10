@@ -30,6 +30,37 @@ defmodule AperDeskWeb.Router do
     pipe_through [:browser, :authenticated]
 
     live "/", LandingLive, :index
+
+    get "/sign-up", AuthController, :new_registration
+    post "/sign-up", AuthController, :create_registration
+    get "/sign-in", AuthController, :new_session
+    post "/sign-in", AuthController, :create_session
+    delete "/sign-out", AuthController, :delete_session
+    get "/sign-out", AuthController, :delete_session
+  end
+
+  # The signed-in application. RequireAuth guards the HTTP request that renders
+  # the LiveView; the on_mount hook guards the socket that connects afterwards,
+  # which is a separate process with only the session to go on.
+  scope "/app", AperDeskWeb do
+    pipe_through [:browser, :authenticated, :require_auth]
+
+    live_session :app, on_mount: {AperDeskWeb.LiveAuth, :require_scope} do
+      live "/", DashboardLive, :index
+      live "/leads", LeadsLive, :index
+
+      # Routes whose contexts exist but whose screens do not yet. Real routes
+      # rather than missing ones, because the sidebar links to them and a 404
+      # is a worse answer than saying plainly what is coming.
+      live "/leads/new", SoonLive, :new_lead
+      live "/calendar", SoonLive, :calendar
+      live "/galleries", SoonLive, :galleries
+      live "/quotes", SoonLive, :quotes
+      live "/finance", SoonLive, :finance
+      live "/team", SoonLive, :team
+      live "/automations", SoonLive, :automations
+      live "/settings", SoonLive, :settings
+    end
   end
 
   # The mobile client is a first-class consumer, so GraphQL sits beside the

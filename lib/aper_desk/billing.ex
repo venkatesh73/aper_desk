@@ -265,16 +265,24 @@ defmodule AperDesk.Billing do
     subscription = get_subscription(scope)
     usage = Repo.get(AperDesk.Billing.StudioUsage, Scope.studio_id(scope))
 
-    case {subscription, usage} do
-      {nil, _} ->
+    case subscription do
+      nil ->
         {:error, :no_subscription}
 
-      {_, nil} ->
-        {:ok, %{plan: subscription.plan, usage: %AperDesk.Billing.StudioUsage{}, meters: []}}
+      subscription ->
+        # A brand-new studio has no counter row yet — the triggers create one on
+        # its first lead or gallery. Falling back to a zeroed struct rather than
+        # returning no meters means the plan panel shows "0 of 50" on day one
+        # instead of rendering blank.
+        usage = usage || %AperDesk.Billing.StudioUsage{studio_id: Scope.studio_id(scope)}
 
-      {subscription, usage} ->
+        # Only limits with a counter behind them. `gallery_window_days` is a plan
+        # property, not something consumed — rendering it as "0 of 60" used
+        # invites the reader to think they have 60 of something left.
+        measurable = Map.keys(AperDesk.Billing.StudioUsage.limit_to_counter())
+
         meters =
-          for key <- Plan.limit_keys() do
+          for key <- Plan.limit_keys(), key in measurable do
             %{
               key: key,
               used: AperDesk.Billing.StudioUsage.used(usage, key),
