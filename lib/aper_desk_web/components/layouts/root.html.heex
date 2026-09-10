@@ -4,7 +4,31 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
-    <.live_title default="AperDesk" suffix=" · Phoenix Framework" phx-no-format>{assigns[:page_title]}</.live_title>
+    <.live_title
+      default="AperDesk · The studio system for photographers"
+      suffix=" · AperDesk"
+      phx-no-format
+    >{assigns[:page_title]}</.live_title>
+    <link rel="icon" href={~p"/images/favicon_io/favicon.ico"} sizes="any" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href={~p"/images/favicon_io/favicon-32x32.png"}
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href={~p"/images/favicon_io/favicon-16x16.png"}
+    />
+    <link rel="apple-touch-icon" href={~p"/images/favicon_io/apple-touch-icon.png"} />
+    <link rel="manifest" href={~p"/images/favicon_io/site.webmanifest"} />
+    <meta name="theme-color" content="#B8722E" />
+    <meta
+      name="description"
+      content="Capture leads, protect dates, deliver galleries and pay the crew. One place, five roles, no spreadsheet."
+    />
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>

@@ -1,5 +1,13 @@
 /* AperDesk design system — ported verbatim from the Aperture Studio OS reference UI.
    Deliberately NOT Tailwind: the reference is a hand-authored token system and we
-   keep it as the single source of truth so the shipped UI matches the design 1:1. */
+   keep it as the single source of truth so the shipped UI matches the design 1:1.
+
+   The typefaces are imported here rather than <link>-ed in the layout, because
+   only app.css and app.js are bundled — see AGENTS.md. Fraunces carries the
+   editorial headlines, Manrope the body, JetBrains Mono the eyebrows and
+   figures. Every one has a real fallback stack: a blocked font request should
+   degrade, not leave the page unreadable. */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
 @import "./design.css";
 @import "./app_extras.css";

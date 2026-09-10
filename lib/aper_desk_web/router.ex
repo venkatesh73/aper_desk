@@ -29,7 +29,7 @@ defmodule AperDeskWeb.Router do
   scope "/", AperDeskWeb do
     pipe_through [:browser, :authenticated]
 
-    get "/", PageController, :home
+    live "/", LandingLive, :index
   end
 
   # The mobile client is a first-class consumer, so GraphQL sits beside the
@@ -46,9 +46,19 @@ defmodule AperDeskWeb.Router do
         Application.compile_env(:aper_desk, [AperDeskWeb.Graphql, :max_complexity], 300)
   end
 
+  # The playground is opened in a browser, which sends `Accept: text/html`.
+  # Running it through the JSON-only :api pipeline returns 406, so it gets its
+  # own pipeline that accepts both.
   if Application.compile_env(:aper_desk, :dev_routes) do
+    pipeline :graphiql do
+      plug :accepts, ["html", "json"]
+      plug :fetch_session
+      plug AperDeskWeb.Plugs.Authenticate
+      plug AperDeskWeb.Graphql.Context
+    end
+
     scope "/api" do
-      pipe_through :api
+      pipe_through :graphiql
 
       forward "/graphiql", Absinthe.Plug.GraphiQL,
         schema: AperDeskWeb.Graphql.Schema,
