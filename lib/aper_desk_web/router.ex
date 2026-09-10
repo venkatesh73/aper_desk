@@ -12,18 +12,49 @@ defmodule AperDeskWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug AperDeskWeb.Plugs.Authenticate
+    plug AperDeskWeb.Graphql.Context
+  end
+
+  # Authentication is resolved for browser requests too, so public pages can
+  # render differently for a signed-in user without a separate pipeline.
+  pipeline :authenticated do
+    plug AperDeskWeb.Plugs.Authenticate
+  end
+
+  pipeline :require_auth do
+    plug AperDeskWeb.Plugs.RequireAuth
   end
 
   scope "/", AperDeskWeb do
-    pipe_through :browser
+    pipe_through [:browser, :authenticated]
 
     get "/", PageController, :home
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", AperDeskWeb do
-  #   pipe_through :api
-  # end
+  # The mobile client is a first-class consumer, so GraphQL sits beside the
+  # LiveView UI rather than being bolted on. Complexity and depth limits are
+  # applied here: a public GraphQL endpoint without them is a denial-of-service
+  # waiting for a deeply nested query.
+  scope "/api" do
+    pipe_through :api
+
+    forward "/graphql", Absinthe.Plug,
+      schema: AperDeskWeb.Graphql.Schema,
+      analyze_complexity: true,
+      max_complexity:
+        Application.compile_env(:aper_desk, [AperDeskWeb.Graphql, :max_complexity], 300)
+  end
+
+  if Application.compile_env(:aper_desk, :dev_routes) do
+    scope "/api" do
+      pipe_through :api
+
+      forward "/graphiql", Absinthe.Plug.GraphiQL,
+        schema: AperDeskWeb.Graphql.Schema,
+        interface: :playground
+    end
+  end
 
   # Enable LiveDashboard in development
   if Application.compile_env(:aper_desk, :dev_routes) do

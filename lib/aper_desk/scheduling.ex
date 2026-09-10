@@ -1,0 +1,336 @@
+defmodule AperDesk.Scheduling do
+  @moduledoc """
+  Shoots, who is on them, and whether anyone is double-booked.
+
+  Clash detection is enforced by a GiST exclusion constraint in Postgres, not
+  by a check-then-insert here. That distinction matters: a read followed by a
+  write has a window between them, and two coordinators booking the same
+  second shooter at the same moment would both pass the check and both insert.
+  The database rejects the loser under any amount of concurrency, and this
+  module turns that rejection into `{:error, {:clash, assignments}}` so the UI
+  can offer to resolve it.
+
+  Holds are deliberately outside the constraint. A soft hold warns about a
+  confirmed shoot rather than being refused — the studio decides whether to
+  pencil something in over the top, and the system's job is to tell the truth
+  rather than to overrule them.
+  """
+
+  import Ecto.Query
+
+  alias AperDesk.Authorization
+  alias AperDesk.Repo
+  alias AperDesk.Scheduling.{Assignment, AvailabilityRule, BookingSlot, Job, TstzRange}
+  alias AperDesk.Scope
+  alias AperDesk.Scoped
+  alias Ecto.Multi
+
+  ## Jobs
+
+  def list_jobs(%Scope{} = scope, opts \\ []) do
+    with :ok <- Authorization.authorize(scope, :"job.read") do
+      {:ok,
+       Job
+       |> Scoped.for_studio(scope)
+       |> filter_jobs(opts)
+       |> order_by([j], asc: j.starts_at)
+       |> Repo.all()}
+    end
+  end
+
+  def fetch_job(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"job.read") do
+      Scoped.fetch(Job, scope, id)
+    end
+  end
+
+  @doc """
+  Create a shoot and reserve everyone on it in one transaction.
+
+  If any assignment clashes, nothing is written — a job whose crew is only
+  half-booked is worse than no job, because it looks scheduled.
+  """
+  def create_job(%Scope{} = scope, attrs, crew \\ []) do
+    with :ok <- Authorization.authorize(scope, :"job.write") do
+      Multi.new()
+      |> Multi.insert(:job, Job.changeset(%Job{}, Scoped.put_studio(attrs, scope)))
+      |> Multi.run(:assignments, fn repo, %{job: job} ->
+        assign_crew(repo, scope, job, crew)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{job: job}} -> {:ok, job}
+        {:error, :assignments, reason, _} -> {:error, reason}
+        {:error, _step, changeset, _} -> {:error, changeset}
+      end
+    end
+  end
+
+  def update_job(%Scope{} = scope, id, attrs) do
+    with :ok <- Authorization.authorize(scope, :"job.write"),
+         {:ok, job} <- Scoped.fetch(Job, scope, id) do
+      job |> Job.changeset(attrs) |> Repo.update()
+    end
+  end
+
+  @doc """
+  Cancel a shoot and release the crew.
+
+  Releasing matters: an assignment left behind keeps blocking those people's
+  calendars for a shoot that is not happening, and the studio would have no
+  idea why the date shows as unavailable.
+  """
+  def cancel_job(%Scope{} = scope, id, reason) do
+    with :ok <- Authorization.authorize(scope, :"job.write"),
+         {:ok, job} <- Scoped.fetch(Job, scope, id) do
+      now = DateTime.utc_now()
+
+      Multi.new()
+      |> Multi.update(
+        :job,
+        Job.changeset(job, %{status: "cancelled"})
+        |> Ecto.Changeset.put_change(:cancelled_at, now)
+        |> Ecto.Changeset.put_change(:cancellation_reason, reason)
+      )
+      |> Multi.update_all(
+        :released,
+        from(a in Assignment, where: a.job_id == ^job.id and is_nil(a.released_at)),
+        set: [released_at: now, updated_at: now]
+      )
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{job: job}} -> {:ok, job}
+        {:error, _step, changeset, _} -> {:error, changeset}
+      end
+    end
+  end
+
+  ## Assignments and clashes
+
+  @doc """
+  Reserve `user_id` for a window.
+
+  Returns `{:error, {:clash, conflicting}}` when the database refuses, with the
+  commitments that caused it already loaded — the UI needs to name them, and
+  re-querying after the fact could show a different answer.
+  """
+  def assign(%Scope{} = scope, attrs) do
+    with :ok <- Authorization.authorize(scope, :"assignment.write") do
+      %Assignment{}
+      |> Assignment.changeset(Scoped.put_studio(attrs, scope))
+      |> Repo.insert()
+      |> case do
+        {:ok, assignment} ->
+          {:ok, assignment}
+
+        {:error, changeset} ->
+          maybe_clash(scope, changeset, attrs)
+      end
+    end
+  end
+
+  def release(%Scope{} = scope, assignment_id) do
+    with :ok <- Authorization.authorize(scope, :"assignment.write"),
+         {:ok, assignment} <- Scoped.fetch(Assignment, scope, assignment_id) do
+      assignment |> Assignment.release_changeset() |> Repo.update()
+    end
+  end
+
+  @doc """
+  Commitments that overlap `period` for `user_id`, ignoring released ones.
+
+  This is the read-only question the calendar asks. It is *not* what prevents
+  a double booking — the constraint is — so a stale answer here is a display
+  issue rather than a correctness one.
+  """
+  def clashes_for(%Scope{} = scope, user_id, {_from, _to} = period, opts \\ []) do
+    exclude_id = Keyword.get(opts, :exclude)
+
+    Assignment
+    |> Scoped.for_studio(scope)
+    |> where([a], a.user_id == ^user_id and is_nil(a.released_at))
+    |> where([a], fragment("? && ?", a.period, type(^period, TstzRange)))
+    |> then(fn q -> if exclude_id, do: where(q, [a], a.id != ^exclude_id), else: q end)
+    |> then(fn q ->
+      if Keyword.get(opts, :blocking_only, false),
+        do: where(q, [a], a.kind != "hold"),
+        else: q
+    end)
+    |> preload(:job)
+    |> Repo.all()
+  end
+
+  @doc """
+  Whether `user_id` can actually be booked for the window.
+
+  Holds are excluded, because the exclusion constraint excludes them: if this
+  said "unavailable" where the database would accept the insert, the UI would
+  grey out a date the studio is entitled to book. Availability here means
+  exactly what the constraint means, and nothing else.
+
+  Use `clashes_for/4` to show soft conflicts — including holds — as warnings.
+  """
+  def available?(%Scope{} = scope, user_id, period),
+    do: clashes_for(scope, user_id, period, blocking_only: true) == []
+
+  @doc """
+  Everyone free for `period`, for the "who can shoot this?" picker.
+
+  Runs as one query rather than a clash check per member, because a studio with
+  twenty freelancers would otherwise issue twenty round trips to render a
+  dropdown.
+  """
+  def available_users(%Scope{} = scope, {_from, _to} = period) do
+    # Holds excluded for the same reason as in `available?/3`: this picker must
+    # offer exactly the people the database would let you book.
+    busy =
+      Assignment
+      |> Scoped.for_studio(scope)
+      |> where([a], is_nil(a.released_at) and a.kind != "hold")
+      |> where([a], fragment("? && ?", a.period, type(^period, TstzRange)))
+      |> select([a], a.user_id)
+
+    from(m in AperDesk.Accounts.Membership,
+      where:
+        m.studio_id == ^Scope.studio_id(scope) and m.status == "active" and
+          m.user_id not in subquery(busy),
+      preload: [:user],
+      select: m
+    )
+    |> Repo.all()
+  end
+
+  @doc "Assignments overlapping a window, for the calendar view."
+  def calendar(%Scope{} = scope, {_from, _to} = period, opts \\ []) do
+    with :ok <- Authorization.authorize(scope, :"assignment.read") do
+      query =
+        Assignment
+        |> Scoped.for_studio(scope)
+        |> where([a], is_nil(a.released_at))
+        |> where([a], fragment("? && ?", a.period, type(^period, TstzRange)))
+        |> preload([:job, :user])
+
+      query =
+        case Keyword.get(opts, :user_id) do
+          nil -> query
+          user_id -> where(query, [a], a.user_id == ^user_id)
+        end
+
+      {:ok, Repo.all(query)}
+    end
+  end
+
+  ## Availability and public booking
+
+  def list_availability(%Scope{} = scope) do
+    AvailabilityRule
+    |> Scoped.for_studio(scope)
+    |> order_by([r], asc: r.day_of_week, asc: r.starts_at_minute)
+    |> Repo.all()
+  end
+
+  def set_availability(%Scope{} = scope, attrs) do
+    with :ok <- Authorization.authorize(scope, :"assignment.write") do
+      %AvailabilityRule{}
+      |> AvailabilityRule.changeset(Scoped.put_studio(attrs, scope))
+      |> Repo.insert()
+    end
+  end
+
+  def list_open_slots(studio_id, from, to) do
+    Repo.all(
+      from s in BookingSlot,
+        where:
+          s.studio_id == ^studio_id and s.status == "open" and
+            s.starts_at >= ^from and s.starts_at < ^to,
+        order_by: s.starts_at
+    )
+  end
+
+  @doc """
+  Take a slot from the public booking page.
+
+  The status guard is in the WHERE clause, so two clients submitting the same
+  slot at once cannot both win: the second update matches zero rows and gets
+  `{:error, :slot_taken}` rather than silently overwriting the first booking.
+  """
+  def book_slot(slot_id, email) when is_binary(email) do
+    now = DateTime.utc_now()
+
+    {count, slots} =
+      Repo.update_all(
+        from(s in BookingSlot,
+          where: s.id == ^slot_id and s.status == "open",
+          select: s
+        ),
+        set: [status: "booked", booked_by_email: email, booked_at: now, updated_at: now]
+      )
+
+    case {count, slots} do
+      {1, [slot]} -> {:ok, slot}
+      _ -> {:error, :slot_taken}
+    end
+  end
+
+  ## Internals
+
+  defp assign_crew(repo, scope, job, crew) do
+    {from, to} = Job.occupied_window(job)
+
+    Enum.reduce_while(crew, {:ok, []}, fn member, {:ok, acc} ->
+      attrs =
+        member
+        |> Map.new(fn {k, v} -> {to_string(k), v} end)
+        |> Map.merge(%{
+          "studio_id" => job.studio_id,
+          "job_id" => job.id,
+          "period" => {from, to}
+        })
+
+      case repo.insert(Assignment.changeset(%Assignment{}, attrs)) do
+        {:ok, assignment} ->
+          {:cont, {:ok, [assignment | acc]}}
+
+        {:error, changeset} ->
+          {:halt, clash_or_changeset(scope, changeset, attrs)}
+      end
+    end)
+  end
+
+  defp clash_or_changeset(scope, changeset, attrs) do
+    case maybe_clash(scope, changeset, attrs) do
+      {:error, reason} -> {:error, reason}
+      other -> other
+    end
+  end
+
+  # An exclusion-constraint violation surfaces as an error on :period. Load the
+  # commitments that caused it so the caller can name them.
+  defp maybe_clash(scope, changeset, attrs) do
+    if Keyword.has_key?(changeset.errors, :period) do
+      user_id = fetch_attr(attrs, "user_id")
+      period = fetch_attr(attrs, "period")
+
+      case {user_id, period} do
+        {nil, _} -> {:error, changeset}
+        {_, nil} -> {:error, changeset}
+        {user_id, period} -> {:error, {:clash, clashes_for(scope, user_id, period)}}
+      end
+    else
+      {:error, changeset}
+    end
+  end
+
+  defp fetch_attr(attrs, key),
+    do: Map.get(attrs, key) || Map.get(attrs, String.to_existing_atom(key))
+
+  defp filter_jobs(query, opts) do
+    Enum.reduce(opts, query, fn
+      {:status, status}, q -> where(q, [j], j.status == ^status)
+      {:from, from}, q -> where(q, [j], j.starts_at >= ^from)
+      {:to, to}, q -> where(q, [j], j.starts_at < ^to)
+      {:limit, limit}, q -> limit(q, ^limit)
+      _, q -> q
+    end)
+  end
+end

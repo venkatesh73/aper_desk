@@ -35,3 +35,9 @@ aper_desk-*.tar
 npm-debug.log
 /assets/node_modules/
 
+
+# macOS finder metadata
+.DS_Store
+
+# Local Claude Code trace log
+ss_claude_trace_hook.log
