@@ -47,3 +47,8 @@ config :aper_desk, AperDesk.Vault,
       {Cloak.Ciphers.AES.GCM,
        tag: "AES.GCM.V1", key: Base.decode64!("YXBlcmRlc2stdGVzdC1vbmx5LXZhdWx0LWtleSEhISE=")}
   ]
+
+# The Test adapter delivers into the test process's mailbox, which is what
+# `Swoosh.TestAssertions` reads. Without it mail goes to the local previewer and
+# tests cannot see it.
+config :aper_desk, AperDesk.Mailer, adapter: Swoosh.Adapters.Test

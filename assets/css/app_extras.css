@@ -94,6 +94,15 @@
 .flash.error{border-color:var(--bad);background:var(--bad-soft)}
 .flash button{margin-left:auto;color:var(--faint);font-size:16px;line-height:1}
 
+/* Federated sign-in button and the divider under it. Full width to match the
+   submit button, and neutral rather than accent-coloured so it does not compete
+   with the primary action on the form. */
+.btn.oauth{width:100%;justify-content:center;gap:9px;padding:9px 14px;font-weight:600}
+.btn.oauth svg{flex:none}
+
+.orline{display:flex;align-items:center;gap:10px;margin:16px 0 4px;color:var(--faint);font-size:12px}
+.orline::before,.orline::after{content:"";flex:1;height:1px;background:var(--line)}
+
 /* Helper text under a form field. Not `.hint`, which design.css styles as a
    bordered callout box and made this read like a second input. */
 .formhint{display:block;margin-top:5px;font-size:12px;color:var(--faint)}

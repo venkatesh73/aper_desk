@@ -97,6 +97,17 @@ config :aper_desk, AperDeskWeb.Graphql,
 
 # --- Mail ------------------------------------------------------------------
 config :aper_desk, AperDesk.Mailer, adapter: Swoosh.Adapters.Local
+
+# The address account email is sent from. Overridden in runtime.exs.
+config :aper_desk, :mail, from: "no-reply@aperdesk.com"
+
+# Google sign-in. Credentials come from the environment; with none set the
+# feature reports itself unconfigured and the button is not rendered, rather
+# than offering a flow that dead-ends at Google's error page.
+config :aper_desk, AperDesk.Accounts.Google,
+  client_id: System.get_env("GOOGLE_CLIENT_ID"),
+  client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
+
 config :swoosh, :api_client, false
 
 # --- Object storage --------------------------------------------------------

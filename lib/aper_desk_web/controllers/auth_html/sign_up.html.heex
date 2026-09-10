@@ -7,6 +7,8 @@
     <h1 class="serif">Start your free trial</h1>
     <p class="sub">Thirty days, no card. Set up in about two minutes.</p>
 
+    <.google_button action="Sign up" />
+
     <.form :let={f} for={@changeset} action={~p"/sign-up"} as={:registration}>
       <label for="registration_name">Your name</label>
       <input

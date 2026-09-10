@@ -35,8 +35,16 @@ defmodule AperDeskWeb.Router do
     post "/sign-up", AuthController, :create_registration
     get "/sign-in", AuthController, :new_session
     post "/sign-in", AuthController, :create_session
-    delete "/sign-out", AuthController, :delete_session
-    get "/sign-out", AuthController, :delete_session
+    delete "/sign-out", AuthController, :sign_out
+    get "/sign-out", AuthController, :sign_out
+
+    get "/auth/google", AuthController, :google_request
+    get "/auth/google/callback", AuthController, :google_callback
+
+    get "/forgot-password", AuthController, :new_reset
+    post "/forgot-password", AuthController, :create_reset
+    get "/reset-password/:token", AuthController, :edit_reset
+    put "/reset-password/:token", AuthController, :update_reset
   end
 
   # The signed-in application. RequireAuth guards the HTTP request that renders
@@ -110,6 +118,8 @@ defmodule AperDeskWeb.Router do
       pipe_through :browser
 
       live_dashboard "/dashboard", metrics: AperDeskWeb.Telemetry
+      # Sent mail is written here in development rather than delivered.
+      forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
   end
 end

@@ -33,6 +33,24 @@ defmodule AperDesk.Accounts.User do
     |> put_password_hash()
   end
 
+  @doc """
+  Registration from a federated provider.
+
+  No password is set: `hashed_password` stays null, and `valid_password?/2`
+  already refuses a null hash while still running a dummy verification — so a
+  password login against a Google-only account is rejected without revealing
+  that the account exists. The email is treated as confirmed because the
+  provider verified it; the caller is responsible for only calling this when it
+  did.
+  """
+  def oauth_registration_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:email, :name, :avatar_url, :time_zone, :locale])
+    |> validate_required([:email, :name])
+    |> validate_email()
+    |> put_change(:confirmed_at, DateTime.utc_now())
+  end
+
   @doc "Profile edits. Deliberately cannot touch email, password or admin flag."
   def profile_changeset(user, attrs) do
     user

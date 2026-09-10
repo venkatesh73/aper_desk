@@ -152,4 +152,8 @@ if config_env() == :prod do
     auth: :always
 
   config :swoosh, :api_client, Swoosh.ApiClient.Finch
+
+  config :aper_desk, AperDesk.Accounts.Google,
+    client_id: System.get_env("GOOGLE_CLIENT_ID"),
+    client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
 end

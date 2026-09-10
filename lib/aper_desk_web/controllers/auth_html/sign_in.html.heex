@@ -9,6 +9,8 @@
 
     <div :if={@error} class="fe" style="margin-bottom:12px">{@error}</div>
 
+    <.google_button action="Sign in" />
+
     <.form :let={_f} for={%{}} action={~p"/sign-in"} as={:session}>
       <label for="session_email">Email</label>
       <input
@@ -31,6 +33,10 @@
 
       <button type="submit" class="btn primary">Sign in</button>
     </.form>
+
+    <p class="alt" style="margin-top:12px">
+      <a href={~p"/forgot-password"}>Forgot your password?</a>
+    </p>
 
     <p class="alt">New here? <a href={~p"/sign-up"}>Start a free trial</a></p>
   </div>

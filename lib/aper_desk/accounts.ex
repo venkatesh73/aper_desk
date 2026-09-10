@@ -9,7 +9,17 @@ defmodule AperDesk.Accounts do
 
   import Ecto.Query
 
-  alias AperDesk.Accounts.{Membership, Registration, Studio, User, UserInvitation, UserToken}
+  alias AperDesk.Accounts.{
+    Membership,
+    Notifier,
+    Registration,
+    Studio,
+    User,
+    UserIdentity,
+    UserInvitation,
+    UserToken
+  }
+
   alias AperDesk.Authorization
   alias AperDesk.Repo
   alias AperDesk.Scope
@@ -124,6 +134,170 @@ defmodule AperDesk.Accounts do
   end
 
   def confirm_user(%User{} = user), do: user |> User.confirm_changeset() |> Repo.update()
+
+  ## Federated sign-in
+
+  @doc """
+  Sign in from a Google profile, creating the account on first use.
+
+  Three cases, in order:
+
+    1. The Google identity is already linked — sign that user in. This is the
+       only path that works regardless of email, which is the point of storing
+       the provider's subject id rather than matching on address.
+    2. No link, but a verified email matches an existing account — link them.
+       **Only when Google reports the email verified.** Linking on an unverified
+       address would let anyone able to create a Google account claiming an
+       address take over the AperDesk account using it.
+    3. Nothing matches — create the user, their studio and the link together.
+
+  An unverified email that matches no account is refused rather than used to
+  create one, because the address is the only thing tying that account to a
+  person and we have no evidence it is theirs.
+  """
+  def sign_in_with_google(%{sub: sub} = profile) when is_binary(sub) do
+    case Repo.get_by(UserIdentity, provider: "google", provider_uid: sub) do
+      %UserIdentity{} = identity ->
+        identity |> UserIdentity.used_changeset() |> Repo.update()
+        {:ok, Repo.get!(User, identity.user_id), :existing}
+
+      nil ->
+        link_or_create(profile)
+    end
+  end
+
+  defp link_or_create(%{email_verified: false, email: email}) when is_binary(email),
+    do: {:error, :email_not_verified}
+
+  defp link_or_create(%{email: nil}), do: {:error, :no_email}
+
+  defp link_or_create(%{email: email} = profile) do
+    case get_user_by_email(email) do
+      %User{} = user ->
+        with {:ok, _identity} <- link_identity(user, profile) do
+          {:ok, user, :linked}
+        end
+
+      nil ->
+        create_from_google(profile)
+    end
+  end
+
+  defp link_identity(%User{} = user, profile) do
+    %UserIdentity{}
+    |> UserIdentity.changeset(%{
+      user_id: user.id,
+      provider: "google",
+      provider_uid: profile.sub,
+      email: profile.email,
+      name: profile.name,
+      avatar_url: profile[:picture],
+      last_used_at: DateTime.utc_now()
+    })
+    |> Repo.insert()
+  end
+
+  # Creates the user, their studio and the Google link in one transaction.
+  #
+  # A federated user has no password: `hashed_password` stays null, and
+  # `User.valid_password?/2` already refuses those while still running a dummy
+  # hash — so a password login against a Google-only account is rejected without
+  # revealing that the account exists.
+  defp create_from_google(profile) do
+    studio_name = profile.name || profile.email |> String.split("@") |> List.first()
+
+    Multi.new()
+    |> Multi.insert(
+      :user,
+      User.oauth_registration_changeset(%User{}, %{
+        name: profile.name || profile.email,
+        email: profile.email,
+        avatar_url: profile[:picture]
+      })
+    )
+    |> Multi.insert(:studio, fn _ ->
+      Studio.changeset(%Studio{}, %{name: "#{studio_name}'s studio"})
+    end)
+    |> Multi.insert(:membership, fn %{user: user, studio: studio} ->
+      Membership.changeset(%Membership{}, %{
+        user_id: user.id,
+        studio_id: studio.id,
+        role: "owner",
+        status: "active"
+      })
+    end)
+    |> Multi.insert(:identity, fn %{user: user} ->
+      UserIdentity.changeset(%UserIdentity{}, %{
+        user_id: user.id,
+        provider: "google",
+        provider_uid: profile.sub,
+        email: profile.email,
+        name: profile.name,
+        avatar_url: profile[:picture],
+        last_used_at: DateTime.utc_now()
+      })
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{user: user}} -> {:ok, user, :created}
+      {:error, _step, changeset, _} -> {:error, changeset}
+    end
+  end
+
+  @doc "The federated identities linked to a user, for the settings screen."
+  def list_identities(%User{} = user),
+    do: Repo.all(from i in UserIdentity, where: i.user_id == ^user.id)
+
+  ## Password reset
+
+  @doc """
+  Start a password reset.
+
+  Always returns `:ok`, whether or not the address belongs to an account. A
+  caller that could tell the difference would be an account-enumeration oracle:
+  "no such user" on a reset form confirms which addresses are registered just as
+  effectively as a login error would.
+
+  Any existing reset tokens for the user are revoked first, so an older link
+  someone has lying around stops working the moment a new one is requested.
+  """
+  def deliver_reset_password_instructions(email, url_builder)
+      when is_binary(email) and is_function(url_builder, 1) do
+    case get_user_by_email(email) do
+      nil ->
+        :ok
+
+      user ->
+        revoke_all_tokens(user, "reset_password")
+        {:ok, token, _record} = create_token(user, "reset_password")
+        Notifier.deliver_reset_password(user, url_builder.(token))
+        :ok
+    end
+  end
+
+  @doc "The user a reset link belongs to, if it is still valid."
+  def fetch_user_by_reset_token(token) when is_binary(token) do
+    case fetch_user_by_token(token, "reset_password") do
+      {:ok, user, _record} -> {:ok, user}
+      error -> error
+    end
+  end
+
+  @doc """
+  Set a new password from a reset link.
+
+  The reset token is consumed and every session ended in the same transaction as
+  the password change — if the point of the reset was that someone else had the
+  old password, leaving their session alive defeats it.
+  """
+  def reset_password(token, attrs) when is_binary(token) do
+    with {:ok, user} <- fetch_user_by_reset_token(token),
+         {:ok, user} <- update_password(user, attrs) do
+      revoke_all_tokens(user, "reset_password")
+      Notifier.deliver_password_changed(user)
+      {:ok, user}
+    end
+  end
 
   ## Tokens
 
