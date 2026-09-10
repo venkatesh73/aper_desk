@@ -10,106 +10,84 @@
           </:actions>
         </.topbar>
 
-        <div class="panel" style="padding:16px;max-width:680px">
-          <.form for={@form} phx-change="validate" phx-submit="save">
-            <label for="lead_title">What is the enquiry?</label>
-            <input
-              type="text"
-              id="lead_title"
-              name="lead[title]"
-              value={@form[:title].value}
-              placeholder="Summer wedding at Villa Rosa"
-              required
-            />
-            <.errors field={@form[:title]} />
-
-            <label for="lead_contact_id">Client</label>
-            <select id="lead_contact_id" name="lead[contact_id]">
-              <option value="">Not linked to a contact yet</option>
-              <option
-                :for={contact <- @contacts}
-                value={contact.id}
-                selected={contact.id == @form[:contact_id].value}
-              >
-                {contact.name}{if contact.email, do: " · #{contact.email}"}
-              </option>
-            </select>
-            <span class="formhint">
-              <a href={~p"/app/contacts/new"} style="color:var(--accent-text)">Add a contact</a>
-              first if they are not listed.
-            </span>
-
-            <label for="lead_shoot_type">Shoot type</label>
-            <select id="lead_shoot_type" name="lead[shoot_type]">
-              <option
-                :for={type <- shoot_types()}
-                value={type}
-                selected={type == @form[:shoot_type].value}
-              >
-                {humanise(type)}
-              </option>
-            </select>
-
-            <label for="lead_desired_date">Shoot date</label>
-            <input
-              type="date"
-              id="lead_desired_date"
-              name="lead[desired_date]"
-              value={@form[:desired_date].value}
-            />
-            <.errors field={@form[:desired_date]} />
-
-            <label for="lead_location">Venue or location</label>
-            <input
-              type="text"
-              id="lead_location"
-              name="lead[location]"
-              value={@form[:location].value}
-            />
-
-            <label for="lead_guest_count">Guests</label>
-            <input
-              type="number"
-              id="lead_guest_count"
-              name="lead[guest_count]"
-              value={@form[:guest_count].value}
-              min="0"
-            />
-            <.errors field={@form[:guest_count]} />
-
-            <label for="lead_budget_cents">Budget</label>
-            <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
-              <input
-                type="number"
-                id="lead_budget_cents"
-                name="lead[budget_cents]"
-                value={@form[:budget_cents].value}
-                min="0"
-                placeholder="In minor units, e.g. 450000 for 4,500"
+        <div class="formpanel">
+          <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+            <.section title="The enquiry">
+              <.text_field
+                field={@form[:title]}
+                label="What is the enquiry?"
+                placeholder="Summer wedding at Villa Rosa"
+                required
               />
-              <input
-                type="text"
-                name="lead[budget_currency]"
-                value={@form[:budget_currency].value || @current_scope.currency}
-                size="4"
+
+              <.field label="Client" hint="Search by name or email.">
+                <.live_component
+                  module={AperDeskWeb.Combobox}
+                  id="lead-contact"
+                  name="lead[contact_id]"
+                  value={@form[:contact_id].value}
+                  options={contact_options(@contacts)}
+                  prompt="Not linked to a contact yet"
+                  search_placeholder="Search contacts"
+                  empty_message="No contact matched"
+                />
+                <:hint_block>
+                  Not listed?
+                  <a href={~p"/app/contacts/new"} style="color:var(--accent-text)">
+                    Add a contact
+                  </a>
+                  first.
+                </:hint_block>
+              </.field>
+
+              <.select_field
+                field={@form[:shoot_type]}
+                label="Shoot type"
+                options={Enum.map(shoot_types(), &{humanise(&1), &1})}
               />
-            </div>
-            <span class="formhint">
-              Amounts are stored in minor units, so 4,500 is entered as 450000.
-            </span>
+            </.section>
 
-            <label for="lead_source">Where did it come from?</label>
-            <select id="lead_source" name="lead[source]">
-              <option
-                :for={source <- sources()}
-                value={source}
-                selected={source == @form[:source].value}
-              >
-                {humanise(source)}
-              </option>
-            </select>
+            <.section title="The shoot" description="All optional — fill in what you know.">
+              <.row layout="wide-narrow">
+                <.text_field field={@form[:location]} label="Venue or location" />
+                <.text_field field={@form[:desired_date]} label="Shoot date" type="date" />
+              </.row>
 
-            <button type="submit" class="btn primary">Create lead</button>
+              <.row>
+                <.text_field field={@form[:guest_count]} label="Guests" type="number" min="0" />
+                <.field label="Budget" hint="Enter it the way you would say it — 4500.">
+                  <div class="row amount">
+                    <input
+                      type="number"
+                      id="lead_budget_major"
+                      name="lead[budget_major]"
+                      value={@budget_major}
+                      min="0"
+                      step="0.01"
+                      placeholder="4500"
+                    />
+                    <input
+                      type="text"
+                      name="lead[budget_currency]"
+                      value={@form[:budget_currency].value || @current_scope.currency}
+                    />
+                  </div>
+                </.field>
+              </.row>
+            </.section>
+
+            <.section title="Where it came from">
+              <.select_field
+                field={@form[:source]}
+                label="Source"
+                options={Enum.map(sources(), &{humanise(&1), &1})}
+              />
+            </.section>
+
+            <.form_actions>
+              <button type="submit" class="btn primary">Create lead</button>
+              <a class="btn ghost" href={~p"/app/leads"}>Cancel</a>
+            </.form_actions>
           </.form>
         </div>
       <% else %>

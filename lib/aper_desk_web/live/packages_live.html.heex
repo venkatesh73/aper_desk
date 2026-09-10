@@ -95,127 +95,103 @@
           </:actions>
         </.topbar>
 
-        <div class="panel" style="padding:16px;max-width:680px">
-          <.form for={@form} phx-change="validate" phx-submit="save">
-            <label for="package_name">Name</label>
-            <input
-              type="text"
-              id="package_name"
-              name="package[name]"
-              value={@form[:name].value}
-              placeholder="Full wedding day"
-              required
-            />
-            <.errors field={@form[:name]} />
-
-            <label for="package_summary">One-line summary</label>
-            <input
-              type="text"
-              id="package_summary"
-              name="package[summary]"
-              value={@form[:summary].value}
-              placeholder="Ten hours, two shooters, 600 edited images"
-            />
-
-            <label for="package_price_major">Price</label>
-            <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                id="package_price_major"
-                name="package[price_major]"
-                value={@price_major}
-                placeholder="4500"
+        <div class="formpanel">
+          <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+            <.section title="What it is">
+              <.text_field
+                field={@form[:name]}
+                label="Name"
+                placeholder="Full wedding day"
+                required
               />
-              <input
-                type="text"
-                name="package[price_currency]"
-                value={@form[:price_currency].value || @current_scope.currency}
-                size="4"
+              <.text_field
+                field={@form[:summary]}
+                label="One-line summary"
+                placeholder="Ten hours, two shooters, 600 edited images"
               />
-            </div>
-            <span class="formhint">
-              Enter it the way you would say it — 4500, not 450000.
-            </span>
-            <.errors field={@form[:price_cents]} />
+              <.select_field
+                field={@form[:shoot_type]}
+                label="Shoot type"
+                options={Enum.map(shoot_types(), &{humanise(&1), &1})}
+              />
+            </.section>
 
-            <label for="package_deposit_percent">Deposit</label>
-            <input
-              type="number"
-              id="package_deposit_percent"
-              name="package[deposit_percent]"
-              value={@form[:deposit_percent].value}
-              min="0"
-              max="100"
-            />
-            <span class="formhint">Percent of the total, taken at signature.</span>
-            <.errors field={@form[:deposit_percent]} />
+            <.section title="What it costs">
+              <.row layout="two">
+                <.field label="Price" hint="Enter it the way you would say it — 4500.">
+                  <div class="row amount">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      id="package_price_major"
+                      name="package[price_major]"
+                      value={@price_major}
+                      placeholder="4500"
+                    />
+                    <input
+                      type="text"
+                      name="package[price_currency]"
+                      value={@form[:price_currency].value || @current_scope.currency}
+                    />
+                  </div>
+                </.field>
 
-            <label for="package_shoot_type">Shoot type</label>
-            <select id="package_shoot_type" name="package[shoot_type]">
-              <option
-                :for={type <- shoot_types()}
-                value={type}
-                selected={type == @form[:shoot_type].value}
-              >
-                {humanise(type)}
-              </option>
-            </select>
+                <.text_field
+                  field={@form[:deposit_percent]}
+                  label="Deposit %"
+                  type="number"
+                  min="0"
+                  max="100"
+                  hint="Taken at signature."
+                />
+              </.row>
+            </.section>
 
-            <label for="package_duration_minutes">Duration in minutes</label>
-            <input
-              type="number"
-              id="package_duration_minutes"
-              name="package[duration_minutes]"
-              value={@form[:duration_minutes].value}
-              min="0"
-            />
+            <.section title="What the client gets">
+              <.row layout="two">
+                <.text_field
+                  field={@form[:duration_minutes]}
+                  label="Duration in minutes"
+                  type="number"
+                  min="0"
+                />
+                <.text_field field={@form[:crew_size]} label="Crew" type="number" min="1" />
+              </.row>
 
-            <label for="package_crew_size">Crew</label>
-            <input
-              type="number"
-              id="package_crew_size"
-              name="package[crew_size]"
-              value={@form[:crew_size].value}
-              min="1"
-            />
+              <.row layout="two">
+                <.text_field
+                  field={@form[:delivery_days]}
+                  label="Delivery in days"
+                  type="number"
+                  min="1"
+                />
+                <.text_field
+                  field={@form[:edited_image_count]}
+                  label="Edited images"
+                  type="number"
+                  min="0"
+                />
+              </.row>
 
-            <label for="package_delivery_days">Delivery in days</label>
-            <input
-              type="number"
-              id="package_delivery_days"
-              name="package[delivery_days]"
-              value={@form[:delivery_days].value}
-              min="1"
-            />
+              <.textarea_field field={@form[:description]} label="Description" rows={4} />
+            </.section>
 
-            <label for="package_edited_image_count">Edited images</label>
-            <input
-              type="number"
-              id="package_edited_image_count"
-              name="package[edited_image_count]"
-              value={@form[:edited_image_count].value}
-              min="0"
-            />
+            <.section title="Where it appears">
+              <.checkbox_field
+                field={@form[:public]}
+                label="Show on the public booking page"
+                checked_default={true}
+                hint="Private packages can still be quoted by hand."
+              />
+            </.section>
 
-            <label for="package_description">Description</label>
-            <textarea id="package_description" name="package[description]" rows="4">{@form[:description].value}</textarea>
-
-            <label style="display:flex;align-items:center;gap:8px;margin-top:14px">
-              <input type="hidden" name="package[public]" value="false" />
-              <input
-                type="checkbox"
-                name="package[public]"
-                value="true"
-                checked={@form[:public].value in [true, "true", nil]}
-                style="width:auto"
-              /> Show on the public booking page
-            </label>
-
-            <button type="submit" class="btn primary">
-              {if @live_action == :new, do: "Create package", else: "Save changes"}
-            </button>
+            <.form_actions>
+              <button type="submit" class="btn primary">
+                {if @live_action == :new, do: "Create package", else: "Save changes"}
+              </button>
+              <a class="btn ghost" href={~p"/app/packages"}>Cancel</a>
+            </.form_actions>
           </.form>
         </div>
       <% end %>

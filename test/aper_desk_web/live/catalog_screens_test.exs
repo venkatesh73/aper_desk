@@ -162,15 +162,25 @@ defmodule AperDeskWeb.CatalogScreensTest do
       %{template: template}
     end
 
+    # The template is chosen through the combobox rather than a select, so the
+    # test drives it the way a person would: open, pick, submit.
+    defp choose_template(view, template) do
+      view |> element("#workflow-template .combo-button") |> render_click()
+
+      view
+      |> element("#workflow-template .combo-option", template.name)
+      |> render_click()
+    end
+
     test "creates a workflow with its first step", %{conn: conn, scope: scope, template: template} do
       {:ok, view, _html} = live(conn, ~p"/app/automations/new")
+      choose_template(view, template)
 
       view
       |> form("form",
         workflow: %{
           name: "Reply to new leads",
           trigger_event: "lead.created",
-          template_id: template.id,
           approval_mode: "ask"
         }
       )
@@ -191,11 +201,10 @@ defmodule AperDeskWeb.CatalogScreensTest do
       template: template
     } do
       {:ok, view, _html} = live(conn, ~p"/app/automations/new")
+      choose_template(view, template)
 
       view
-      |> form("form",
-        workflow: %{name: "W", trigger_event: "lead.created", template_id: template.id}
-      )
+      |> form("form", workflow: %{name: "W", trigger_event: "lead.created"})
       |> render_submit()
 
       {:ok, [workflow]} = Automation.list_workflows(scope)
@@ -208,7 +217,7 @@ defmodule AperDeskWeb.CatalogScreensTest do
 
       html =
         view
-        |> form("form", workflow: %{name: "W", trigger_event: "lead.created", template_id: ""})
+        |> form("form", workflow: %{name: "W", trigger_event: "lead.created"})
         |> render_submit()
 
       assert html =~ "Choose the template"

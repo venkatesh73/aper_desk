@@ -86,6 +86,7 @@ defmodule AperDeskWeb do
       import Phoenix.HTML
       # Core UI components
       import AperDeskWeb.CoreComponents
+      import AperDeskWeb.FormComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

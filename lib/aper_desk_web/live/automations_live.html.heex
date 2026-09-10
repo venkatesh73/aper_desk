@@ -131,84 +131,87 @@
             </:actions>
           </.topbar>
 
-          <div class="panel" style="padding:16px;max-width:680px">
-            <.form for={@form} phx-change="validate" phx-submit="save">
-              <label for="workflow_name">Name</label>
-              <input
-                type="text"
-                id="workflow_name"
-                name="workflow[name]"
-                value={@form[:name].value}
-                placeholder="Reply to new wedding enquiries"
-                required
-              />
-              <.errors field={@form[:name]} />
+          <div class="formpanel">
+            <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+              <.section title="What it is">
+                <.text_field
+                  field={@form[:name]}
+                  label="Name"
+                  placeholder="Reply to new wedding enquiries"
+                  required
+                />
+                <.select_field
+                  field={@form[:trigger_event]}
+                  label="When this happens"
+                  options={Enum.map(trigger_events(), &{humanise(&1), &1})}
+                  prompt="Choose a trigger"
+                  required
+                />
+              </.section>
 
-              <label for="workflow_trigger_event">When this happens</label>
-              <select id="workflow_trigger_event" name="workflow[trigger_event]" required>
-                <option value="">Choose a trigger</option>
-                <option
-                  :for={event <- trigger_events()}
-                  value={event}
-                  selected={event == @form[:trigger_event].value}
+              <.section title="What it does">
+                <.field label="Send this template">
+                  <.live_component
+                    module={AperDeskWeb.Combobox}
+                    id="workflow-template"
+                    name="workflow[template_id]"
+                    value={@step["template_id"]}
+                    options={Enum.map(@templates, &{&1.name, &1.id, &1.subject})}
+                    prompt="Choose a template"
+                    search_placeholder="Search templates"
+                    empty_message="No template matched"
+                    allow_clear={false}
+                  />
+                  <:hint_block>
+                    No templates yet? <a
+                      href={~p"/app/templates/email/new"}
+                      style="color:var(--accent-text)"
+                    >
+                      Write one first
+                    </a>.
+                  </:hint_block>
+                </.field>
+
+                <.field label="Wait before sending">
+                  <select name="workflow[delay_minutes]">
+                    <option
+                      :for={
+                        {label, minutes} <- [
+                          {"Straight away", 0},
+                          {"After 1 hour", 60},
+                          {"After 1 day", 1440},
+                          {"After 3 days", 4320}
+                        ]
+                      }
+                      value={minutes}
+                      selected={to_string(minutes) == @step["delay_minutes"]}
+                    >
+                      {label}
+                    </option>
+                  </select>
+                </.field>
+              </.section>
+
+              <.section title="Before it sends">
+                <.field
+                  label="Approval"
+                  hint="Asking first is the default, because your studio's name is on every message."
                 >
-                  {humanise(event)}
-                </option>
-              </select>
-              <.errors field={@form[:trigger_event]} />
+                  <select name="workflow[approval_mode]">
+                    <option value="ask" selected={@form[:approval_mode].value in [nil, "ask"]}>
+                      Ask me first
+                    </option>
+                    <option value="auto" selected={@form[:approval_mode].value == "auto"}>
+                      Let it send on its own
+                    </option>
+                  </select>
+                </.field>
+              </.section>
 
-              <label for="workflow_template_id">Send this template</label>
-              <select id="workflow_template_id" name="workflow[template_id]" required>
-                <option value="">Choose a template</option>
-                <option
-                  :for={template <- @templates}
-                  value={template.id}
-                  selected={template.id == @step["template_id"]}
-                >
-                  {template.name}
-                </option>
-              </select>
-              <span class="formhint">
-                No templates yet? <a
-                  href={~p"/app/templates/email/new"}
-                  style="color:var(--accent-text)"
-                >
-                  Write one first
-                </a>.
-              </span>
-
-              <label for="workflow_delay_minutes">Wait before sending</label>
-              <select id="workflow_delay_minutes" name="workflow[delay_minutes]">
-                <option
-                  :for={
-                    {label, minutes} <- [
-                      {"Straight away", 0},
-                      {"After 1 hour", 60},
-                      {"After 1 day", 1440},
-                      {"After 3 days", 4320}
-                    ]
-                  }
-                  value={minutes}
-                  selected={to_string(minutes) == @step["delay_minutes"]}
-                >
-                  {label}
-                </option>
-              </select>
-
-              <label for="workflow_approval_mode">Before it sends</label>
-              <select id="workflow_approval_mode" name="workflow[approval_mode]">
-                <option value="ask" selected={@form[:approval_mode].value in [nil, "ask"]}>
-                  Ask me first
-                </option>
-                <option value="auto" selected={@form[:approval_mode].value == "auto"}>
-                  Let it send on its own
-                </option>
-              </select>
-              <span class="formhint">
-                Asking first is the default, because your studio's name is on every message.
-              </span>
-
-              <button type="submit" class="btn primary">Create workflow</button>
+              <.form_actions>
+                <button type="submit" class="btn primary">Create workflow</button>
+                <a class="btn ghost" href={~p"/app/automations"}>Cancel</a>
+              </.form_actions>
             </.form>
           </div>
         <% else %>
@@ -221,60 +224,45 @@
             </:actions>
           </.topbar>
 
-          <div class="panel" style="padding:16px;max-width:680px">
-            <.form for={@form} phx-change="validate" phx-submit="save">
-              <label for="sequence_name">Name</label>
-              <input
-                type="text"
-                id="sequence_name"
-                name="sequence[name]"
-                value={@form[:name].value}
-                placeholder="Quiet wedding enquiries"
-                required
-              />
-              <.errors field={@form[:name]} />
+          <div class="formpanel">
+            <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+              <.section title="What it is">
+                <.text_field
+                  field={@form[:name]}
+                  label="Name"
+                  placeholder="Quiet wedding enquiries"
+                  required
+                />
+                <.select_field
+                  field={@form[:enter_when_stage]}
+                  label="Only for leads at this stage"
+                  options={Enum.map(stages(), &{humanise(&1), &1})}
+                />
+              </.section>
 
-              <label for="sequence_enter_when_stage">Only for leads at this stage</label>
-              <select id="sequence_enter_when_stage" name="sequence[enter_when_stage]">
-                <option
-                  :for={stage <- stages()}
-                  value={stage}
-                  selected={stage == (@form[:enter_when_stage].value || "")}
-                >
-                  {humanise(stage)}
-                </option>
-              </select>
+              <.section title="When it starts and stops">
+                <.text_field
+                  field={@form[:enter_after_days]}
+                  label="Start after this many quiet days"
+                  type="number"
+                  min="0"
+                  hint="Counted from the last message either way, so a lead you just emailed is not chased."
+                />
 
-              <label for="sequence_enter_after_days">Start after this many quiet days</label>
-              <input
-                type="number"
-                id="sequence_enter_after_days"
-                name="sequence[enter_after_days]"
-                value={@form[:enter_after_days].value || 3}
-                min="0"
-              />
-              <span class="formhint">
-                Counted from the last message either way, so a lead you just emailed is not chased.
-              </span>
-              <.errors field={@form[:enter_after_days]} />
+                <.checkbox_field
+                  field={@form[:exit_on_reply]}
+                  label="Stop the moment they reply"
+                  checked_default={true}
+                  hint="Leaving this off means the sequence keeps sending after a client has answered."
+                />
+              </.section>
 
-              <label style="display:flex;align-items:center;gap:8px;margin-top:14px">
-                <input type="hidden" name="sequence[exit_on_reply]" value="false" />
-                <input
-                  type="checkbox"
-                  name="sequence[exit_on_reply]"
-                  value="true"
-                  checked={@form[:exit_on_reply].value in [true, "true", nil]}
-                  style="width:auto"
-                /> Stop the moment they reply
-              </label>
-              <span class="formhint">
-                Leaving this off means the sequence keeps sending after a client has answered.
-              </span>
-
-              <button type="submit" class="btn primary">
-                {if @record, do: "Save changes", else: "Create sequence"}
-              </button>
+              <.form_actions>
+                <button type="submit" class="btn primary">
+                  {if @record, do: "Save changes", else: "Create sequence"}
+                </button>
+                <a class="btn ghost" href={~p"/app/automations?tab=nurture"}>Cancel</a>
+              </.form_actions>
             </.form>
           </div>
         <% end %>

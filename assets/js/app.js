@@ -29,6 +29,23 @@ import topbar from "../vendor/topbar"
 // not asked to find its own city in a dropdown. The server validates the value
 // and ignores it if a zone has already been chosen.
 const hooks = {
+  // The combobox's search box lives inside the surrounding form, so Enter would
+  // implicitly submit that form — racing the selection and, because the submit
+  // re-rendered the component first, choosing the wrong option. Arrow keys would
+  // also move the caret rather than the highlight. This takes the navigation
+  // keys before the browser acts on them and hands them to the component.
+  ComboSearch: {
+    mounted() {
+      this.el.addEventListener("keydown", (e) => {
+        if (["Enter", "ArrowDown", "ArrowUp", "Escape"].includes(e.key)) {
+          e.preventDefault()
+          e.stopPropagation()
+          this.pushEventTo(this.el.closest("[data-combo]"), "move", {key: e.key})
+        }
+      })
+    }
+  },
+
   DetectTimeZone: {
     mounted() {
       try {

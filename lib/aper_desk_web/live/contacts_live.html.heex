@@ -153,88 +153,59 @@
             </:actions>
           </.topbar>
 
-          <div class="panel" style="padding:16px;max-width:640px">
-            <.form for={@form} phx-change="validate" phx-submit="save">
-              <label for="contact_name">Name</label>
-              <input
-                type="text"
-                id="contact_name"
-                name="contact[name]"
-                value={@form[:name].value}
-                autocomplete="name"
-                required
-              />
-              <.errors field={@form[:name]} />
+          <div class="formpanel">
+            <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+              <.section title="Who they are">
+                <.row layout="two">
+                  <.text_field field={@form[:name]} label="Name" autocomplete="name" required />
+                  <.text_field
+                    field={@form[:partner_name]}
+                    label="Partner name"
+                    hint="For couples, so both names appear on the quote."
+                  />
+                </.row>
 
-              <label for="contact_partner_name">Partner name</label>
-              <input
-                type="text"
-                id="contact_partner_name"
-                name="contact[partner_name]"
-                value={@form[:partner_name].value}
-              />
-              <span class="formhint">For couples, so both names appear on the quote.</span>
-
-              <label for="contact_email">Email</label>
-              <input
-                type="email"
-                id="contact_email"
-                name="contact[email]"
-                value={@form[:email].value}
-                autocomplete="email"
-              />
-              <.errors field={@form[:email]} />
-
-              <label for="contact_phone">Phone</label>
-              <input
-                type="tel"
-                id="contact_phone"
-                name="contact[phone]"
-                value={@form[:phone].value}
-                autocomplete="tel"
-              />
-
-              <label for="contact_company">Company</label>
-              <input
-                type="text"
-                id="contact_company"
-                name="contact[company]"
-                value={@form[:company].value}
-                autocomplete="organization"
-              />
-
-              <label for="contact_preferred_channel">Prefers to be contacted by</label>
-              <select id="contact_preferred_channel" name="contact[preferred_channel]">
-                <option
-                  :for={channel <- channels()}
-                  value={channel}
-                  selected={channel == @form[:preferred_channel].value}
-                >
-                  {channel_label(channel)}
-                </option>
-              </select>
-
-              <label for="contact_notes">Notes</label>
-              <textarea id="contact_notes" name="contact[notes]" rows="4">{@form[:notes].value}</textarea>
-
-              <label style="display:flex;align-items:center;gap:8px;margin-top:14px">
-                <input
-                  type="hidden"
-                  name="contact[marketing_opt_in]"
-                  value="false"
+                <.text_field
+                  field={@form[:company]}
+                  label="Company"
+                  autocomplete="organization"
                 />
-                <input
-                  type="checkbox"
-                  name="contact[marketing_opt_in]"
-                  value="true"
-                  checked={@form[:marketing_opt_in].value in [true, "true"]}
-                  style="width:auto"
-                /> They agreed to marketing email
-              </label>
+              </.section>
 
-              <button type="submit" class="btn primary">
-                {if @live_action == :new, do: "Add contact", else: "Save changes"}
-              </button>
+              <.section title="How to reach them">
+                <.row layout="two">
+                  <.text_field
+                    field={@form[:email]}
+                    label="Email"
+                    type="email"
+                    autocomplete="email"
+                  />
+                  <.text_field field={@form[:phone]} label="Phone" type="tel" autocomplete="tel" />
+                </.row>
+
+                <.select_field
+                  field={@form[:preferred_channel]}
+                  label="Prefers to be contacted by"
+                  options={Enum.map(channels(), &{channel_label(&1), &1})}
+                />
+
+                <.checkbox_field
+                  field={@form[:marketing_opt_in]}
+                  label="They agreed to marketing email"
+                  hint="Only tick this if they actually said yes."
+                />
+              </.section>
+
+              <.section title="Anything else">
+                <.textarea_field field={@form[:notes]} label="Notes" rows={4} />
+              </.section>
+
+              <.form_actions>
+                <button type="submit" class="btn primary">
+                  {if @live_action == :new, do: "Add contact", else: "Save changes"}
+                </button>
+                <a class="btn ghost" href={~p"/app/contacts"}>Cancel</a>
+              </.form_actions>
             </.form>
           </div>
       <% end %>

@@ -1,6 +1,6 @@
 <Layouts.app flash={@flash}>
   <div class="authwrap" id="setup" phx-hook="DetectTimeZone">
-    <div class="authcard" style="max-width:560px">
+    <div class="authcard" style="max-width:600px">
       <a class="brand" href={~p"/"} style="margin-bottom:18px">
         <img src={~p"/images/logo-long.png"} alt="AperDesk" width="132" height="44" />
       </a>
@@ -11,113 +11,81 @@
         read, so they are worth a moment now.
       </p>
 
-      <.form for={@form} phx-change="validate" phx-submit="save">
-        <label for="setup_city">Where are you based?</label>
-        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
-          <input
-            type="text"
-            id="setup_city"
-            name="setup[city]"
-            value={@form[:city].value}
-            placeholder="City"
-            autocomplete="address-level2"
+      <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+        <.section title="Where you are based">
+          <.row layout="wide-narrow">
+            <.text_field
+              field={@form[:city]}
+              label="City"
+              autocomplete="address-level2"
+              required
+            />
+            <.text_field
+              field={@form[:country_code]}
+              label="Country"
+              placeholder="CH"
+              maxlength="2"
+              autocomplete="country"
+              required
+            />
+          </.row>
+
+          <.select_field
+            field={@form[:time_zone]}
+            label="Time zone"
+            options={Enum.map(@time_zones, &{String.replace(&1, "_", " "), &1})}
+            hint="Shoot times and reply targets are shown in this zone."
             required
           />
-          <input
-            type="text"
-            id="setup_country_code"
-            name="setup[country_code]"
-            value={@form[:country_code].value}
-            placeholder="CH"
-            maxlength="2"
-            style="text-transform:uppercase"
-            autocomplete="country"
+        </.section>
+
+        <.section title="Money">
+          <.select_field
+            field={@form[:base_currency]}
+            label="Reporting currency"
+            options={Enum.map(@currencies, &{&1, &1})}
+            hint="You can still quote clients in another currency. This is the one your reports total in."
             required
           />
-        </div>
-        <.errors field={@form[:city]} />
-        <.errors field={@form[:country_code]} />
+        </.section>
 
-        <label for="setup_time_zone">Time zone</label>
-        <select id="setup_time_zone" name="setup[time_zone]" required>
-          <option
-            :for={zone <- @time_zones}
-            value={zone}
-            selected={zone == @form[:time_zone].value}
-          >
-            {String.replace(zone, "_", " ")}
-          </option>
-        </select>
-        <span class="formhint">Shoot times and reply targets are shown in this zone.</span>
-        <.errors field={@form[:time_zone]} />
+        <.section title="How dates should read">
+          <.row layout="two">
+            <.select_field
+              field={@form[:date_format]}
+              label="Date format"
+              options={Enum.map(Studio.date_formats(), &{date_format_label(&1), &1})}
+            />
+            <.select_field
+              field={@form[:time_format]}
+              label="Time format"
+              options={Enum.map(Studio.time_formats(), &{time_format_label(&1), &1})}
+            />
+          </.row>
 
-        <label for="setup_base_currency">Reporting currency</label>
-        <select id="setup_base_currency" name="setup[base_currency]" required>
-          <option
-            :for={code <- @currencies}
-            value={code}
-            selected={code == @form[:base_currency].value}
-          >
-            {code}
-          </option>
-        </select>
-        <span class="formhint">
-          You can still quote clients in another currency. This is the one your reports total in.
-        </span>
-        <.errors field={@form[:base_currency]} />
+          <.select_field
+            field={@form[:week_starts_on]}
+            label="Weeks start on"
+            options={Enum.map(Studio.week_starts(), &{week_start_label(&1), &1})}
+          />
 
-        <label for="setup_date_format">Date format</label>
-        <select id="setup_date_format" name="setup[date_format]">
-          <option
-            :for={format <- Studio.date_formats()}
-            value={format}
-            selected={format == @form[:date_format].value}
-          >
-            {date_format_label(format)}
-          </option>
-        </select>
+          <div class="hint">
+            Dates will look like <span class="mono">{@preview}</span>
+          </div>
+        </.section>
 
-        <label for="setup_time_format">Time format</label>
-        <select id="setup_time_format" name="setup[time_format]">
-          <option
-            :for={format <- Studio.time_formats()}
-            value={format}
-            selected={format == @form[:time_format].value}
-          >
-            {time_format_label(format)}
-          </option>
-        </select>
+        <.section title="Replying to enquiries">
+          <.select_field
+            field={@form[:reply_sla_minutes]}
+            label="Reply to new enquiries"
+            options={Enum.map(sla_options(), fn {label, minutes} -> {label, minutes} end)}
+            hint="The dashboard measures against this. Nothing is sent automatically."
+          />
+        </.section>
 
-        <label for="setup_week_starts_on">Weeks start on</label>
-        <select id="setup_week_starts_on" name="setup[week_starts_on]">
-          <option
-            :for={day <- Studio.week_starts()}
-            value={day}
-            selected={day == @form[:week_starts_on].value}
-          >
-            {week_start_label(day)}
-          </option>
-        </select>
-
-        <div class="hint" style="margin-top:12px">
-          Dates will look like <span class="mono">{@preview}</span>
-        </div>
-
-        <label for="setup_reply_sla_minutes">Reply to new enquiries</label>
-        <select id="setup_reply_sla_minutes" name="setup[reply_sla_minutes]">
-          <option
-            :for={{label, minutes} <- sla_options()}
-            value={minutes}
-            selected={to_string(minutes) == to_string(@form[:reply_sla_minutes].value)}
-          >
-            {label}
-          </option>
-        </select>
-        <span class="formhint">
-          The dashboard measures against this. Nothing is sent automatically.
-        </span>
-
-        <button type="submit" class="btn primary">Save and continue</button>
+        <.form_actions>
+          <button type="submit" class="btn primary">Save and continue</button>
+        </.form_actions>
       </.form>
     </div>
   </div>

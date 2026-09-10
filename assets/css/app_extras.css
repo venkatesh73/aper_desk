@@ -112,6 +112,88 @@
 .orline{display:flex;align-items:center;gap:10px;margin:16px 0 4px;color:var(--faint);font-size:12px}
 .orline::before,.orline::after{content:"";flex:1;height:1px;background:var(--line)}
 
+/* ---------------------------------------------------------------- forms ----
+   The reference design styles bare inputs but never laid out a form, so app
+   forms had a 1px gap between every label and its control: no rhythm, nothing
+   grouped, and the submit button touching the last field. This is that layout.
+
+   One number does the work — `--field-gap` between fields, half of it between a
+   label and its own control — so a field reads as one unit and the space
+   between fields reads as a separator. */
+.form{--field-gap:18px;display:flex;flex-direction:column;gap:var(--field-gap)}
+.form .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.form .field > label{font-size:12.5px;font-weight:600;color:var(--text);margin:0}
+.form .field .formhint{margin-top:0}
+.form .field .fe{margin-top:0}
+
+/* Two or three controls that belong together on one line — a city and its
+   country, an amount and its currency. Collapses on narrow screens rather than
+   squeezing each one below readability. */
+/* Top-aligned, not bottom: two fields side by side rarely have the same height
+   once one of them carries a hint, and aligning at the bottom then staggers
+   their labels. */
+.form .row{display:grid;gap:10px;align-items:start}
+.form .row.two{grid-template-columns:1fr 1fr}
+.form .row.amount{grid-template-columns:1fr 96px}
+.form .row.wide-narrow{grid-template-columns:2fr 1fr}
+
+@media (max-width:640px){
+  .form .row{grid-template-columns:1fr}
+}
+
+/* A named group of fields, with a rule above it. Long forms need somewhere for
+   the eye to rest. */
+.form .sect{display:flex;flex-direction:column;gap:var(--field-gap);padding-top:20px;border-top:1px solid var(--line2)}
+.form .sect:first-child{padding-top:0;border-top:0}
+.form .sect > .sect-head{display:flex;flex-direction:column;gap:2px}
+.form .sect > .sect-head h3{font-size:14px;font-weight:700}
+.form .sect > .sect-head p{margin:0;font-size:12.5px;color:var(--muted)}
+
+/* The actions row is separated by a rule, so the primary button is never
+   mistaken for another field. */
+.form .form-actions{display:flex;gap:8px;align-items:center;padding-top:18px;margin-top:2px;border-top:1px solid var(--line2)}
+.form .form-actions .spacer{flex:1}
+
+/* A checkbox reads as one line, not as a label above a control.
+   Named `checkfield`, not `check`: design.css already uses `.check` for a
+   checklist container laid out as a column, and reusing the name stacked the
+   box above its own label. */
+.checkfield{display:flex;align-items:flex-start;gap:9px;cursor:pointer}
+.checkfield input[type="checkbox"]{width:16px;height:16px;margin-top:1px;flex:none;accent-color:var(--accent)}
+.checkfield > span{font-size:13px}
+.checkfield .formhint{display:block;margin-top:2px}
+
+/* Panels that hold a form get room to breathe. */
+.formpanel{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:22px 24px;max-width:720px}
+.formpanel > .form-intro{margin:-4px 0 20px;color:var(--muted);font-size:13px}
+
+@media (max-width:640px){
+  .formpanel{padding:18px 16px}
+}
+
+/* ------------------------------------------------------------ combobox ----
+   A select that can be searched. Native <select> cannot filter, and a studio
+   with 400 contacts cannot scroll to one. */
+.combo{position:relative}
+.combo-button{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);font:inherit;color:var(--text);text-align:left;cursor:pointer;min-height:34px}
+.combo-button:hover{border-color:var(--faint)}
+.combo-button[aria-expanded="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.combo-button .combo-value{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.combo-button .combo-value.placeholder{color:var(--faint)}
+.combo-button .combo-caret{flex:none;width:14px;height:14px;stroke:var(--faint);fill:none;stroke-width:2}
+
+.combo-panel{position:absolute;z-index:60;top:calc(100% + 4px);left:0;right:0;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.combo-search{padding:8px;border-bottom:1px solid var(--line2)}
+.combo-search input{padding:6px 9px}
+.combo-list{max-height:260px;overflow-y:auto;padding:4px}
+.combo-option{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border-radius:var(--r-sm);background:none;border:0;font:inherit;color:var(--text);text-align:left;cursor:pointer}
+.combo-option:hover,.combo-option[data-active="true"]{background:var(--panel2)}
+.combo-option[aria-selected="true"]{background:var(--accent-soft);color:var(--accent-text);font-weight:600}
+.combo-option .combo-sub{margin-left:auto;font-size:12px;color:var(--faint)}
+.combo-empty{padding:14px 10px;text-align:center;font-size:13px;color:var(--faint)}
+.combo-clear{padding:6px 9px;border-top:1px solid var(--line2);width:100%;text-align:left;background:none;border-left:0;border-right:0;border-bottom:0;font:inherit;font-size:12.5px;color:var(--muted);cursor:pointer}
+.combo-clear:hover{color:var(--text);background:var(--panel2)}
+
 /* Helper text under a form field. Not `.hint`, which design.css styles as a
    bordered callout box and made this read like a second input. */
 .formhint{display:block;margin-top:5px;font-size:12px;color:var(--faint)}
@@ -125,8 +207,16 @@ input.invalid,select.invalid,textarea.invalid{border-color:var(--bad)}
 .authcard{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:28px;box-shadow:var(--shadow)}
 .authcard h1{font-size:22px;margin-bottom:4px}
 .authcard .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
-.authcard label{display:block;font-size:12.5px;font-weight:600;margin:12px 0 5px}
-.authcard .btn{width:100%;margin-top:18px}
+.authcard label{display:block;font-size:12.5px;font-weight:600;margin:16px 0 6px}
+.authcard label:first-of-type{margin-top:0}
+.authcard .formhint + label{margin-top:16px}
+.authcard .fe + label{margin-top:14px}
+.authcard .btn{width:100%;margin-top:22px}
+.authcard .btn.oauth{margin-top:0}
+/* Inside the setup card the form owns its own rhythm, so the card's label
+   margins must not fight it. */
+.authcard .form label{margin:0}
+.authcard .form .btn{margin-top:0}
 .authcard .alt{margin-top:16px;text-align:center;font-size:13px;color:var(--muted)}
 .authcard .alt a{color:var(--accent-text);font-weight:600}
 

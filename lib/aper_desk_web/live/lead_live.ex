@@ -38,6 +38,9 @@ defmodule AperDeskWeb.LeadLive do
     |> assign(lead: %Lead{})
     |> assign(contacts: contacts(scope))
     |> assign(custom_fields: Crm.list_custom_fields(scope))
+    # Budget is typed in major units, which is not a schema field, so it is
+    # carried across re-renders here rather than read back from the struct.
+    |> assign(budget_major: nil)
     |> assign(form: to_form(Crm.change_lead(), as: :lead))
   end
 
@@ -66,13 +69,21 @@ defmodule AperDeskWeb.LeadLive do
   def handle_event("validate", %{"lead" => params}, socket) do
     changeset =
       socket.assigns.lead
-      |> Crm.change_lead(params)
+      |> Crm.change_lead(to_minor(params, socket.assigns.current_scope))
       |> Map.put(:action, :validate)
 
-    {:noreply, assign(socket, form: to_form(changeset, as: :lead))}
+    {:noreply,
+     socket
+     |> assign(form: to_form(changeset, as: :lead))
+     |> assign(budget_major: params["budget_major"] || socket.assigns.budget_major)}
   end
 
   def handle_event("save", %{"lead" => params}, socket) do
+    params =
+      params
+      |> Map.put_new("budget_major", socket.assigns.budget_major)
+      |> to_minor(socket.assigns.current_scope)
+
     case Crm.create_lead(socket.assigns.current_scope, params) do
       {:ok, lead} ->
         {:noreply,
@@ -145,6 +156,38 @@ defmodule AperDeskWeb.LeadLive do
   end
 
   ## Data
+
+  # Budgets are typed the way people say them. The conversion to minor units
+  # happens once, here, and everything below this line is integer cents.
+  defp to_minor(params, scope) do
+    currency = params["budget_currency"] || scope.currency
+
+    case params["budget_major"] do
+      nil ->
+        params
+
+      "" ->
+        Map.drop(params, ["budget_major"])
+
+      major ->
+        exponent = Money.exponent(currency)
+
+        cents =
+          case Float.parse(to_string(major)) do
+            {value, _rest} -> round(value * :math.pow(10, exponent))
+            :error -> nil
+          end
+
+        params
+        |> Map.drop(["budget_major"])
+        |> Map.put("budget_cents", cents)
+        |> Map.put("budget_currency", currency)
+    end
+  end
+
+  @doc "Contacts as combobox options, with the email as the searchable detail."
+  def contact_options(contacts),
+    do: Enum.map(contacts, &{&1.name, &1.id, &1.email})
 
   defp contacts(scope) do
     case Crm.list_contacts(scope, limit: 200) do

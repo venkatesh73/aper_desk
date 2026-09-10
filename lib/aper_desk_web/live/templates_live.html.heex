@@ -164,117 +164,83 @@
           </:actions>
         </.topbar>
 
-        <div class="panel" style="padding:16px;max-width:720px">
-          <.form for={@form} phx-change="validate" phx-submit="save">
-            <label for="template_name">Name</label>
-            <input
-              type="text"
-              id="template_name"
-              name="template[name]"
-              value={@form[:name].value}
-              required
-            />
-            <.errors field={@form[:name]} />
+        <div class="formpanel">
+          <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+            <.section title="Name it">
+              <.text_field field={@form[:name]} label="Name" required />
 
-            <%= if @kind == "email" do %>
-              <label for="template_key">Key</label>
-              <input
-                type="text"
-                id="template_key"
-                name="template[key]"
-                value={@form[:key].value}
+              <.text_field
+                :if={@kind == "email"}
+                field={@form[:key]}
+                label="Key"
                 placeholder="enquiry_reply"
+                hint="How workflows refer to it. Lowercase letters, numbers and underscores."
                 required
               />
-              <span class="formhint">
-                How workflows refer to it. Lowercase letters, numbers and underscores.
-              </span>
-              <.errors field={@form[:key]} />
+            </.section>
 
-              <label for="template_subject">Subject</label>
-              <input
-                type="text"
-                id="template_subject"
-                name="template[subject]"
-                value={@form[:subject].value}
+            <.section :if={@kind == "email"} title="The message">
+              <.text_field
+                field={@form[:subject]}
+                label="Subject"
                 placeholder="Thanks for getting in touch, {{first_name}}"
                 required
               />
-              <.errors field={@form[:subject]} />
+              <.textarea_field field={@form[:body]} label="Message" rows={12} required />
 
-              <label for="template_body">Message</label>
-              <textarea id="template_body" name="template[body]" rows="12" required>{@form[:body].value}</textarea>
-              <.errors field={@form[:body]} />
-
-              <div class="hint" style="margin-top:10px">
+              <div class="hint">
                 <span class="eyebrow">Placeholders</span>
-                <div style="margin-top:6px">
+                <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:8px">
                   <span :for={token <- tokens()} class="mono">
                     &#123;&#123;{token}&#125;&#125;
                   </span>
                 </div>
-                <span style="display:block;margin-top:6px">
+                <span style="display:block;margin-top:8px">
                   An unknown placeholder is left visible rather than blanked, so a mistake is
                   obvious in a test send instead of arriving as a gap.
                 </span>
               </div>
-            <% end %>
+            </.section>
 
-            <%= if @kind == "contract" do %>
-              <label for="template_body">Terms</label>
-              <textarea id="template_body" name="template[body]" rows="16" required>{@form[:body].value}</textarea>
-              <.errors field={@form[:body]} />
+            <.section :if={@kind == "contract"} title="The terms">
+              <.textarea_field field={@form[:body]} label="Terms" rows={16} required />
+              <.checkbox_field
+                field={@form[:requires_deposit]}
+                label="A deposit is required at signature"
+                checked_default={true}
+              />
+            </.section>
 
-              <label style="display:flex;align-items:center;gap:8px;margin-top:14px">
-                <input type="hidden" name="template[requires_deposit]" value="false" />
-                <input
-                  type="checkbox"
-                  name="template[requires_deposit]"
-                  value="true"
-                  checked={@form[:requires_deposit].value in [true, "true", nil]}
-                  style="width:auto"
-                /> A deposit is required at signature
-              </label>
-            <% end %>
-
-            <%= if @kind == "questionnaire" do %>
-              <label for="template_headline">Headline</label>
-              <input
-                type="text"
-                id="template_headline"
-                name="template[headline]"
-                value={@form[:headline].value}
+            <.section :if={@kind == "questionnaire"} title="What the client sees">
+              <.text_field
+                field={@form[:headline]}
+                label="Headline"
                 placeholder="Tell us about your day"
               />
+              <.textarea_field field={@form[:intro]} label="Intro" rows={3} />
+              <.textarea_field
+                field={@form[:success_message]}
+                label="Thank-you message"
+                rows={2}
+                hint="Questions are added on the form's own page once it exists."
+              />
+            </.section>
 
-              <label for="template_intro">Intro</label>
-              <textarea id="template_intro" name="template[intro]" rows="3">{@form[:intro].value}</textarea>
+            <.section :if={@kind in ["email", "contract"]} title="When to offer it">
+              <.select_field
+                field={@form[:shoot_type]}
+                label="Shoot type"
+                options={Enum.map(shoot_types(), &{humanise(&1), &1})}
+                hint="Leave as any to offer it for every shoot."
+              />
+            </.section>
 
-              <label for="template_success_message">Thank-you message</label>
-              <textarea id="template_success_message" name="template[success_message]" rows="2">{@form[:success_message].value}</textarea>
-
-              <span class="formhint">
-                Questions are edited on the form's own page once it exists.
-              </span>
-            <% end %>
-
-            <%= if @kind in ["email", "contract"] do %>
-              <label for="template_shoot_type">Shoot type</label>
-              <select id="template_shoot_type" name="template[shoot_type]">
-                <option
-                  :for={type <- shoot_types()}
-                  value={type}
-                  selected={type == (@form[:shoot_type].value || "")}
-                >
-                  {humanise(type)}
-                </option>
-              </select>
-              <span class="formhint">Leave as any to offer it for every shoot.</span>
-            <% end %>
-
-            <button type="submit" class="btn primary">
-              {if @record, do: "Save changes", else: "Create"}
-            </button>
+            <.form_actions>
+              <button type="submit" class="btn primary">
+                {if @record, do: "Save changes", else: "Create"}
+              </button>
+              <a class="btn ghost" href={~p"/app/templates?tab=#{@kind}"}>Cancel</a>
+            </.form_actions>
           </.form>
         </div>
       <% end %>
