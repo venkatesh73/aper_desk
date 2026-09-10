@@ -86,6 +86,71 @@ defmodule AperDeskWeb.LandingLiveTest do
     end
   end
 
+  describe "theme toggle" do
+    test "is a real toggle, not a one-way switch", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      # The bug this guards: the button carried a hardcoded data-phx-theme="dark",
+      # so every click set dark and the visitor could never get back to light.
+      assert html =~ "data-theme-toggle"
+
+      refute html =~ ~s(data-phx-theme="dark"),
+             "a fixed theme value means the button can only ever switch one way"
+    end
+
+    test "ships both icons so the correct one shows before JS runs", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "ico-sun"
+      assert html =~ "ico-moon"
+    end
+  end
+
+  describe "imagery" do
+    test "renders the marketing photography rather than empty placeholders", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      for image <- ~w(hero-couple.jpg hero-photographer.jpg hero-portrait.jpg
+                      phase-capture.jpg phase-book.jpg phase-run.jpg phase-deliver.jpg
+                      cta-celebration.jpg testimonial-avatar.jpg) do
+        assert html =~ image, "#{image} is not on the page"
+      end
+
+      refute html =~ "photo ph", "a placeholder was left in place of a photo"
+    end
+
+    test "serves images locally rather than hotlinking a third-party CDN", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      refute html =~ "images.unsplash.com",
+             "hotlinking makes the landing page depend on someone else's uptime"
+    end
+
+    test "every referenced image exists on disk", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      html
+      |> then(&Regex.scan(~r{/images/[\w./-]+}, &1))
+      |> List.flatten()
+      |> Enum.uniq()
+      |> Enum.each(fn path ->
+        file = Path.join(Application.app_dir(:aper_desk, "priv/static"), path)
+        assert File.exists?(file), "#{path} is referenced but missing from priv/static"
+      end)
+    end
+
+    test "every image on the page carries alt text", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      images = Regex.scan(~r/<img[^>]*>/, html) |> List.flatten()
+      assert length(images) >= 10
+
+      for tag <- images do
+        assert tag =~ ~r/\salt=/, "image without alt text: #{tag}"
+      end
+    end
+  end
+
   describe "billing period" do
     test "yearly shows the monthly equivalent, to the cent", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")

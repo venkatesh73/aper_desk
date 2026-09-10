@@ -270,6 +270,8 @@ defmodule AperDeskWeb.LandingLive do
     [
       %{
         number: "01",
+        image: "phase-capture.jpg",
+        alt: "A couple laughing at their wedding",
         name: "Capture",
         title: "Every inquiry becomes a lead on its own.",
         body:
@@ -282,6 +284,8 @@ defmodule AperDeskWeb.LandingLive do
       },
       %{
         number: "02",
+        image: "phase-book.jpg",
+        alt: "A wedding venue set for dinner",
         name: "Book",
         title: "Bookings without the back and forth.",
         body:
@@ -294,6 +298,8 @@ defmodule AperDeskWeb.LandingLive do
       },
       %{
         number: "03",
+        image: "phase-run.jpg",
+        alt: "A photographer at work",
         name: "Run",
         title: "Stay on top of every shoot without a spreadsheet.",
         body:
@@ -306,6 +312,8 @@ defmodule AperDeskWeb.LandingLive do
       },
       %{
         number: "04",
+        image: "phase-deliver.jpg",
+        alt: "A bride and groom walking",
         name: "Deliver",
         title: "Galleries clients love, on your brand.",
         body:

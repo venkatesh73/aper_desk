@@ -54,6 +54,38 @@
   :root:not([data-theme="light"]) .brand img{filter:invert(1) hue-rotate(180deg)}
 }
 
+/* design.css defines the dark palette only under [data-theme="dark"], so a
+   visitor whose OS is set to dark got a light page until they clicked the
+   toggle — and the toggle's icon, which does honour the system preference,
+   disagreed with what they were looking at. This applies the same palette when
+   the system asks for dark and the visitor has not explicitly chosen light.
+   Tokens duplicated from design.css:11 rather than edited there, so the ported
+   reference stays a faithful copy. */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#151210; --panel:#1D1916; --panel2:#262019; --line:#372F27; --line2:#2C251F;
+    --text:#F1EAE0; --muted:#B0A496; --faint:#7A6F63;
+    --accent:#E3A45A; --accent-soft:#3A2A17; --accent-text:#F0BE7A; --on-accent:#1A1410;
+    --ok:#4CC08B; --ok-soft:#1B3328; --warn:#F0A247; --warn-soft:#3B2A12;
+    --bad:#EF7069; --bad-soft:#3E1F1D;
+    --shadow:0 24px 60px -30px rgba(0,0,0,.7);
+  }
+}
+
+/* The theme button shows the theme you will switch TO: a moon while the page is
+   light, a sun while it is dark. Done in CSS rather than by swapping the icon in
+   JavaScript so the correct one is already showing on first paint. */
+.theme-btn .ico-sun{display:none}
+.theme-btn .ico-moon{display:block}
+
+:root[data-theme="dark"] .theme-btn .ico-sun{display:block}
+:root[data-theme="dark"] .theme-btn .ico-moon{display:none}
+
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .theme-btn .ico-sun{display:block}
+  :root:not([data-theme="light"]) .theme-btn .ico-moon{display:none}
+}
+
 /* Server-rendered flash messages, styled with the design tokens. */
 .flash-group{position:fixed;top:16px;right:16px;z-index:80;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 32px))}
 .flash{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);font-size:13px}

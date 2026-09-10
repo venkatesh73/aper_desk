@@ -40,6 +40,57 @@ window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 
+// --- Theme -----------------------------------------------------------------
+//
+// Theme is a client concern: it lives in localStorage and as a data-theme
+// attribute on <html>, and the server never sees it. The layout applies the
+// stored value before paint (app.js is deferred, so doing it here would flash
+// the wrong theme); this is the behaviour that runs afterwards.
+//
+// The toggle flips the *effective* theme, which matters when nothing is stored
+// yet: with no attribute set the page follows the system preference, so a
+// visitor on a dark OS must get light on the first click, not dark again.
+const THEME_KEY = "phx:theme"
+
+const prefersDark = () =>
+  window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+
+const effectiveTheme = () =>
+  document.documentElement.getAttribute("data-theme") || (prefersDark() ? "dark" : "light")
+
+const applyTheme = (theme) => {
+  if (theme === "system") {
+    localStorage.removeItem(THEME_KEY)
+    document.documentElement.removeAttribute("data-theme")
+  } else {
+    localStorage.setItem(THEME_KEY, theme)
+    document.documentElement.setAttribute("data-theme", theme)
+  }
+}
+
+// Delegated so it keeps working across LiveView patches and navigation, which
+// replace the button element itself.
+document.addEventListener("click", (e) => {
+  const toggle = e.target.closest("[data-theme-toggle]")
+  if (!toggle) return
+  e.preventDefault()
+  applyTheme(effectiveTheme() === "dark" ? "light" : "dark")
+})
+
+// Follow the OS while the visitor has not chosen for themselves.
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (!localStorage.getItem(THEME_KEY)) document.documentElement.removeAttribute("data-theme")
+  })
+}
+
+// Kept for anything still driving the theme declaratively with
+// JS.dispatch("phx:set-theme") and a data-phx-theme value.
+window.addEventListener("phx:set-theme", (e) => {
+  const requested = e.target && e.target.dataset ? e.target.dataset.phxTheme : null
+  if (requested) applyTheme(requested)
+})
+
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session

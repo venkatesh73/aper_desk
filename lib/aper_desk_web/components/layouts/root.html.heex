@@ -33,22 +33,17 @@
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
     <script>
+      // Applied before paint so the correct theme is already on <html> when the
+      // first pixels are drawn. app.js is deferred, so doing this there would
+      // flash the light theme at anyone who chose dark. Everything else about
+      // theming lives in app.js.
       (() => {
-        const setTheme = (theme) => {
-          if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.removeAttribute("data-theme");
-          } else {
-            localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme", theme);
-          }
-        };
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
+        try {
+          const stored = localStorage.getItem("phx:theme");
+          if (stored) document.documentElement.setAttribute("data-theme", stored);
+        } catch (_e) {
+          // Private mode or blocked storage: fall back to the system preference.
         }
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
       })();
     </script>
   </head>
