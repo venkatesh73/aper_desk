@@ -1,0 +1,5 @@
+/* AperDesk design system — ported verbatim from the Aperture Studio OS reference UI.
+   Deliberately NOT Tailwind: the reference is a hand-authored token system and we
+   keep it as the single source of truth so the shipped UI matches the design 1:1. */
+@import "./design.css";
+@import "./app_extras.css";
