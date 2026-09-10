@@ -1,0 +1,283 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:templates} />
+
+    <div class="main">
+      <%= if @live_action == :index do %>
+        <.topbar
+          title="Templates"
+          subtitle="Written once, sent often. Nothing here is sent automatically."
+        >
+          <:actions>
+            <a class="btn primary" href={~p"/app/templates/#{@tab}/new"}>
+              + New {label(@tab)}
+            </a>
+          </:actions>
+        </.topbar>
+
+        <div class="seg" style="margin-bottom:14px">
+          <button
+            :for={tab <- tabs()}
+            aria-pressed={to_string(@tab == tab)}
+            phx-click="switch-tab"
+            phx-value-tab={tab}
+          >
+            {tab_label(tab)}
+          </button>
+        </div>
+
+        <%= case @tab do %>
+          <% "email" -> %>
+            <.empty
+              :if={@email_templates == []}
+              title="No email templates yet"
+              body="An enquiry reply, a booking confirmation, a gallery-ready note."
+            />
+            <div :if={@email_templates != []} class="tablewrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Subject</th>
+                    <th>Shoot type</th>
+                    <th>Key</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={template <- @email_templates}>
+                    <td>
+                      <span class="name">{template.name}</span>
+                      <span :if={template.system_template} class="pill">starter</span>
+                    </td>
+                    <td>{template.subject}</td>
+                    <td>{humanise(template.shoot_type)}</td>
+                    <td class="mono">{template.key}</td>
+                    <td style="text-align:right">
+                      <a class="btn sm" href={~p"/app/templates/email/#{template}/edit"}>Edit</a>
+                      <button
+                        class="btn sm ghost"
+                        phx-click="archive"
+                        phx-value-kind="email"
+                        phx-value-id={template.id}
+                        data-confirm="Archive this template? Workflows using it will stop finding it."
+                      >
+                        Archive
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          <% "contract" -> %>
+            <.empty
+              :if={@contract_templates == []}
+              title="No contract templates yet"
+              body="Write your terms once; clients sign on their phone."
+            />
+            <div :if={@contract_templates != []} class="tablewrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Shoot type</th>
+                    <th>Deposit</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={template <- @contract_templates}>
+                    <td><span class="name">{template.name}</span></td>
+                    <td>{humanise(template.shoot_type)}</td>
+                    <td>{if template.requires_deposit, do: "Required", else: "Not required"}</td>
+                    <td style="text-align:right">
+                      <a class="btn sm" href={~p"/app/templates/contract/#{template}/edit"}>
+                        Edit
+                      </a>
+                      <button
+                        class="btn sm ghost"
+                        phx-click="archive"
+                        phx-value-kind="contract"
+                        phx-value-id={template.id}
+                        data-confirm="Archive this template? Contracts already drafted are untouched."
+                      >
+                        Archive
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          <% "questionnaire" -> %>
+            <.empty
+              :if={@forms == []}
+              title="No questionnaires yet"
+              body="Embed one on your site and every submission arrives as a tracked lead."
+            />
+            <div :if={@forms != []} class="tablewrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Link</th>
+                    <th>Questions</th>
+                    <th>Submissions</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={form <- @forms}>
+                    <td>
+                      <span class="name">{form.name}</span>
+                      <span :if={not form.active} class="pill">inactive</span>
+                    </td>
+                    <td class="mono">/f/{form.slug}</td>
+                    <td>{length(AperDesk.Comms.LeadCaptureForm.field_list(form))}</td>
+                    <td>{form.submission_count}</td>
+                    <td style="text-align:right">
+                      <a class="btn sm" href={~p"/app/templates/questionnaire/#{form}/edit"}>
+                        Edit
+                      </a>
+                      <button
+                        :if={form.active}
+                        class="btn sm ghost"
+                        phx-click="archive"
+                        phx-value-kind="questionnaire"
+                        phx-value-id={form.id}
+                        data-confirm="Deactivate this form? The embed will stop accepting submissions."
+                      >
+                        Deactivate
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+        <% end %>
+      <% else %>
+        <.topbar
+          title={if @record, do: "Edit #{label(@kind)}", else: "New #{label(@kind)}"}
+          subtitle="Nothing here is sent without you approving it."
+        >
+          <:actions>
+            <a class="btn" href={~p"/app/templates?tab=#{@kind}"}>Cancel</a>
+          </:actions>
+        </.topbar>
+
+        <div class="panel" style="padding:16px;max-width:720px">
+          <.form for={@form} phx-change="validate" phx-submit="save">
+            <label for="template_name">Name</label>
+            <input
+              type="text"
+              id="template_name"
+              name="template[name]"
+              value={@form[:name].value}
+              required
+            />
+            <.errors field={@form[:name]} />
+
+            <%= if @kind == "email" do %>
+              <label for="template_key">Key</label>
+              <input
+                type="text"
+                id="template_key"
+                name="template[key]"
+                value={@form[:key].value}
+                placeholder="enquiry_reply"
+                required
+              />
+              <span class="formhint">
+                How workflows refer to it. Lowercase letters, numbers and underscores.
+              </span>
+              <.errors field={@form[:key]} />
+
+              <label for="template_subject">Subject</label>
+              <input
+                type="text"
+                id="template_subject"
+                name="template[subject]"
+                value={@form[:subject].value}
+                placeholder="Thanks for getting in touch, {{first_name}}"
+                required
+              />
+              <.errors field={@form[:subject]} />
+
+              <label for="template_body">Message</label>
+              <textarea id="template_body" name="template[body]" rows="12" required>{@form[:body].value}</textarea>
+              <.errors field={@form[:body]} />
+
+              <div class="hint" style="margin-top:10px">
+                <span class="eyebrow">Placeholders</span>
+                <div style="margin-top:6px">
+                  <span :for={token <- tokens()} class="mono">
+                    &#123;&#123;{token}&#125;&#125;
+                  </span>
+                </div>
+                <span style="display:block;margin-top:6px">
+                  An unknown placeholder is left visible rather than blanked, so a mistake is
+                  obvious in a test send instead of arriving as a gap.
+                </span>
+              </div>
+            <% end %>
+
+            <%= if @kind == "contract" do %>
+              <label for="template_body">Terms</label>
+              <textarea id="template_body" name="template[body]" rows="16" required>{@form[:body].value}</textarea>
+              <.errors field={@form[:body]} />
+
+              <label style="display:flex;align-items:center;gap:8px;margin-top:14px">
+                <input type="hidden" name="template[requires_deposit]" value="false" />
+                <input
+                  type="checkbox"
+                  name="template[requires_deposit]"
+                  value="true"
+                  checked={@form[:requires_deposit].value in [true, "true", nil]}
+                  style="width:auto"
+                /> A deposit is required at signature
+              </label>
+            <% end %>
+
+            <%= if @kind == "questionnaire" do %>
+              <label for="template_headline">Headline</label>
+              <input
+                type="text"
+                id="template_headline"
+                name="template[headline]"
+                value={@form[:headline].value}
+                placeholder="Tell us about your day"
+              />
+
+              <label for="template_intro">Intro</label>
+              <textarea id="template_intro" name="template[intro]" rows="3">{@form[:intro].value}</textarea>
+
+              <label for="template_success_message">Thank-you message</label>
+              <textarea id="template_success_message" name="template[success_message]" rows="2">{@form[:success_message].value}</textarea>
+
+              <span class="formhint">
+                Questions are edited on the form's own page once it exists.
+              </span>
+            <% end %>
+
+            <%= if @kind in ["email", "contract"] do %>
+              <label for="template_shoot_type">Shoot type</label>
+              <select id="template_shoot_type" name="template[shoot_type]">
+                <option
+                  :for={type <- shoot_types()}
+                  value={type}
+                  selected={type == (@form[:shoot_type].value || "")}
+                >
+                  {humanise(type)}
+                </option>
+              </select>
+              <span class="formhint">Leave as any to offer it for every shoot.</span>
+            <% end %>
+
+            <button type="submit" class="btn primary">
+              {if @record, do: "Save changes", else: "Create"}
+            </button>
+          </.form>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>

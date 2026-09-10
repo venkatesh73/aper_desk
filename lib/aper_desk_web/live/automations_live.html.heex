@@ -1,0 +1,284 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:automations} />
+
+    <div class="main">
+      <%= if @live_action == :index do %>
+        <.topbar
+          title="Automations"
+          subtitle="Every rule states what fires it and what it does."
+        >
+          <:actions>
+            <a
+              :if={@tab == "nurture"}
+              class="btn primary"
+              href={~p"/app/automations/nurture/new"}
+            >
+              + New sequence
+            </a>
+            <a :if={@tab != "nurture"} class="btn primary" href={~p"/app/automations/new"}>
+              + New workflow
+            </a>
+          </:actions>
+        </.topbar>
+
+        <div class="seg" style="margin-bottom:14px">
+          <button
+            :for={
+              {tab, label} <- [
+                {"workflows", "Workflows"},
+                {"nurture", "Nurture"},
+                {"approvals", "Waiting on you"}
+              ]
+            }
+            aria-pressed={to_string(@tab == tab)}
+            phx-click="switch-tab"
+            phx-value-tab={tab}
+          >
+            {label}{if tab == "approvals" and @approvals != [], do: " (#{length(@approvals)})"}
+          </button>
+        </div>
+
+        <%= case @tab do %>
+          <% "workflows" -> %>
+            <.empty
+              :if={@workflows == []}
+              title="No workflows yet"
+              body="A workflow watches for something happening and does one thing about it."
+            />
+            <div :if={@workflows != []} class="list panel">
+              <div :for={workflow <- @workflows} class="it" style="align-items:flex-start">
+                <span class={["dot", not workflow.active && "off"]}></span>
+                <span>
+                  <b>{workflow.name}</b>
+                  <span class="sub">
+                    When <span class="mono">{workflow.trigger_event}</span>
+                    · {mode_label(workflow.approval_mode)} · {length(workflow.steps)} step(s)
+                    · ran {workflow.run_count} time(s)
+                  </span>
+                </span>
+                <span class="spacer"></span>
+                <button
+                  class="btn sm"
+                  phx-click="set-mode"
+                  phx-value-id={workflow.id}
+                  phx-value-mode={if workflow.approval_mode == "ask", do: "auto", else: "ask"}
+                >
+                  {if workflow.approval_mode == "ask", do: "Let it run", else: "Ask me first"}
+                </button>
+                <button
+                  class={["btn sm", not workflow.active && "primary"]}
+                  phx-click="toggle-workflow"
+                  phx-value-id={workflow.id}
+                  phx-value-active={to_string(not workflow.active)}
+                >
+                  {if workflow.active, do: "Switch off", else: "Switch on"}
+                </button>
+              </div>
+            </div>
+          <% "nurture" -> %>
+            <.empty
+              :if={@sequences == []}
+              title="No nurture sequences yet"
+              body="A sequence follows up on leads that go quiet, and stops the moment they reply."
+            />
+            <div :if={@sequences != []} class="list panel">
+              <div :for={sequence <- @sequences} class="it" style="align-items:flex-start">
+                <span class={["dot", not sequence.active && "off"]}></span>
+                <span>
+                  <b>{sequence.name}</b>
+                  <span class="sub">
+                    {humanise(sequence.shoot_type)} · enters after {sequence.enter_after_days} quiet
+                    day(s) · {length(sequence.steps)} message(s)
+                    · {if sequence.exit_on_reply,
+                      do: "stops on reply",
+                      else: "continues after a reply"}
+                  </span>
+                </span>
+                <span class="spacer"></span>
+                <a class="btn sm" href={~p"/app/automations/nurture/#{sequence}/edit"}>Edit</a>
+              </div>
+            </div>
+          <% "approvals" -> %>
+            <.empty
+              :if={@approvals == []}
+              title="Nothing is waiting on you"
+              body="Steps set to ask first will appear here, showing exactly what would be sent."
+            />
+            <div :if={@approvals != []} class="list panel">
+              <div :for={step <- @approvals} class="it" style="align-items:flex-start">
+                <span class="dot warn"></span>
+                <span>
+                  <b>{step.name}</b>
+                  <span class="sub">{preview_line(step)}</span>
+                  <span class="sub mono">
+                    {step.run.workflow.name} · {time_ago(step.inserted_at)}
+                  </span>
+                </span>
+                <span class="spacer"></span>
+                <button class="btn sm" phx-click="reject" phx-value-id={step.id}>Reject</button>
+                <button class="btn sm primary" phx-click="approve" phx-value-id={step.id}>
+                  Approve
+                </button>
+              </div>
+            </div>
+        <% end %>
+      <% else %>
+        <%= if @kind == :workflow do %>
+          <.topbar title="New workflow" subtitle="It stays switched off until you turn it on.">
+            <:actions>
+              <a class="btn" href={~p"/app/automations"}>Cancel</a>
+            </:actions>
+          </.topbar>
+
+          <div class="panel" style="padding:16px;max-width:680px">
+            <.form for={@form} phx-change="validate" phx-submit="save">
+              <label for="workflow_name">Name</label>
+              <input
+                type="text"
+                id="workflow_name"
+                name="workflow[name]"
+                value={@form[:name].value}
+                placeholder="Reply to new wedding enquiries"
+                required
+              />
+              <.errors field={@form[:name]} />
+
+              <label for="workflow_trigger_event">When this happens</label>
+              <select id="workflow_trigger_event" name="workflow[trigger_event]" required>
+                <option value="">Choose a trigger</option>
+                <option
+                  :for={event <- trigger_events()}
+                  value={event}
+                  selected={event == @form[:trigger_event].value}
+                >
+                  {humanise(event)}
+                </option>
+              </select>
+              <.errors field={@form[:trigger_event]} />
+
+              <label for="workflow_template_id">Send this template</label>
+              <select id="workflow_template_id" name="workflow[template_id]" required>
+                <option value="">Choose a template</option>
+                <option
+                  :for={template <- @templates}
+                  value={template.id}
+                  selected={template.id == @step["template_id"]}
+                >
+                  {template.name}
+                </option>
+              </select>
+              <span class="formhint">
+                No templates yet? <a
+                  href={~p"/app/templates/email/new"}
+                  style="color:var(--accent-text)"
+                >
+                  Write one first
+                </a>.
+              </span>
+
+              <label for="workflow_delay_minutes">Wait before sending</label>
+              <select id="workflow_delay_minutes" name="workflow[delay_minutes]">
+                <option
+                  :for={
+                    {label, minutes} <- [
+                      {"Straight away", 0},
+                      {"After 1 hour", 60},
+                      {"After 1 day", 1440},
+                      {"After 3 days", 4320}
+                    ]
+                  }
+                  value={minutes}
+                  selected={to_string(minutes) == @step["delay_minutes"]}
+                >
+                  {label}
+                </option>
+              </select>
+
+              <label for="workflow_approval_mode">Before it sends</label>
+              <select id="workflow_approval_mode" name="workflow[approval_mode]">
+                <option value="ask" selected={@form[:approval_mode].value in [nil, "ask"]}>
+                  Ask me first
+                </option>
+                <option value="auto" selected={@form[:approval_mode].value == "auto"}>
+                  Let it send on its own
+                </option>
+              </select>
+              <span class="formhint">
+                Asking first is the default, because your studio's name is on every message.
+              </span>
+
+              <button type="submit" class="btn primary">Create workflow</button>
+            </.form>
+          </div>
+        <% else %>
+          <.topbar
+            title={if @record, do: "Edit #{@record.name}", else: "New nurture sequence"}
+            subtitle="Follows up on leads that go quiet."
+          >
+            <:actions>
+              <a class="btn" href={~p"/app/automations?tab=nurture"}>Cancel</a>
+            </:actions>
+          </.topbar>
+
+          <div class="panel" style="padding:16px;max-width:680px">
+            <.form for={@form} phx-change="validate" phx-submit="save">
+              <label for="sequence_name">Name</label>
+              <input
+                type="text"
+                id="sequence_name"
+                name="sequence[name]"
+                value={@form[:name].value}
+                placeholder="Quiet wedding enquiries"
+                required
+              />
+              <.errors field={@form[:name]} />
+
+              <label for="sequence_enter_when_stage">Only for leads at this stage</label>
+              <select id="sequence_enter_when_stage" name="sequence[enter_when_stage]">
+                <option
+                  :for={stage <- stages()}
+                  value={stage}
+                  selected={stage == (@form[:enter_when_stage].value || "")}
+                >
+                  {humanise(stage)}
+                </option>
+              </select>
+
+              <label for="sequence_enter_after_days">Start after this many quiet days</label>
+              <input
+                type="number"
+                id="sequence_enter_after_days"
+                name="sequence[enter_after_days]"
+                value={@form[:enter_after_days].value || 3}
+                min="0"
+              />
+              <span class="formhint">
+                Counted from the last message either way, so a lead you just emailed is not chased.
+              </span>
+              <.errors field={@form[:enter_after_days]} />
+
+              <label style="display:flex;align-items:center;gap:8px;margin-top:14px">
+                <input type="hidden" name="sequence[exit_on_reply]" value="false" />
+                <input
+                  type="checkbox"
+                  name="sequence[exit_on_reply]"
+                  value="true"
+                  checked={@form[:exit_on_reply].value in [true, "true", nil]}
+                  style="width:auto"
+                /> Stop the moment they reply
+              </label>
+              <span class="formhint">
+                Leaving this off means the sequence keeps sending after a client has answered.
+              </span>
+
+              <button type="submit" class="btn primary">
+                {if @record, do: "Save changes", else: "Create sequence"}
+              </button>
+            </.form>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>

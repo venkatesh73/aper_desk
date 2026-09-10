@@ -70,6 +70,19 @@ defmodule AperDeskWeb.Router do
 
       live "/leads/:id", LeadLive, :show
 
+      live "/packages", PackagesLive, :index
+      live "/packages/new", PackagesLive, :new
+      live "/packages/:id/edit", PackagesLive, :edit
+
+      live "/templates", TemplatesLive, :index
+      live "/templates/:kind/new", TemplatesLive, :new
+      live "/templates/:kind/:id/edit", TemplatesLive, :edit
+
+      live "/automations", AutomationsLive, :index
+      live "/automations/new", AutomationsLive, :new_workflow
+      live "/automations/nurture/new", AutomationsLive, :new_sequence
+      live "/automations/nurture/:id/edit", AutomationsLive, :edit_sequence
+
       # Routes whose contexts exist but whose screens do not yet. Real routes
       # rather than missing ones, because the sidebar links to them and a 404
       # is a worse answer than saying plainly what is coming.
@@ -78,7 +91,6 @@ defmodule AperDeskWeb.Router do
       live "/quotes", SoonLive, :quotes
       live "/finance", SoonLive, :finance
       live "/team", SoonLive, :team
-      live "/automations", SoonLive, :automations
       live "/settings", SoonLive, :settings
     end
   end

@@ -1,0 +1,224 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:packages} />
+
+    <div class="main">
+      <%= if @live_action == :index do %>
+        <.topbar title="Packages" subtitle={"#{length(@packages)} on offer"}>
+          <:actions>
+            <button
+              class="btn sm"
+              phx-click="toggle-archived"
+              aria-pressed={to_string(@show_archived)}
+            >
+              {if @show_archived, do: "Hide archived", else: "Show archived"}
+            </button>
+            <a class="btn primary" href={~p"/app/packages/new"}>+ New package</a>
+          </:actions>
+        </.topbar>
+
+        <.empty
+          :if={@packages == []}
+          title="No packages yet"
+          body="A package is what you sell: a name, a price, and what is included."
+        />
+
+        <div :if={@packages != []} class="pkgs">
+          <div :for={package <- @packages} class="pcard">
+            <div class="ph-head">
+              <h3>{package.name}</h3>
+              <span class="spacer"></span>
+              <span :if={package.archived_at} class="pill">archived</span>
+              <span :if={not package.public and is_nil(package.archived_at)} class="pill">
+                private
+              </span>
+            </div>
+
+            <div style="padding:0 14px 12px">
+              <div class="price serif" style="font-size:26px">{price(package)}</div>
+              <p style="margin:6px 0 0;color:var(--muted);font-size:13px">
+                {package.summary || "No summary yet."}
+              </p>
+
+              <div class="kv" style="margin-top:12px">
+                <span>Shoot type</span><span>{humanise(package.shoot_type)}</span>
+                <span>Duration</span><span>{duration(package)}</span>
+                <span>Crew</span><span>{package.crew_size}</span>
+                <span>Delivery</span><span>{package.delivery_days} days</span>
+                <span>Deposit</span><span>{deposit(package)} ({package.deposit_percent}%)</span>
+                <span :if={package.edited_image_count}>Edited images</span>
+                <span :if={package.edited_image_count}>{package.edited_image_count}</span>
+              </div>
+
+              <div :if={package.items != []} style="margin-top:12px">
+                <span class="eyebrow">Included</span>
+                <div class="list" style="margin-top:4px">
+                  <div :for={item <- package.items} class="it">
+                    <span class={["dot", not item.included && "off"]}></span>
+                    <span>
+                      <b>{item.label}</b><span :if={item.detail} class="sub">{item.detail}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="actions">
+                <a class="btn sm" href={~p"/app/packages/#{package}/edit"}>Edit</a>
+                <button
+                  :if={is_nil(package.archived_at)}
+                  class="btn sm ghost"
+                  phx-click="archive"
+                  phx-value-id={package.id}
+                  data-confirm={"Archive #{package.name}? Existing quotes are unaffected."}
+                >
+                  Archive
+                </button>
+                <button
+                  :if={package.archived_at}
+                  class="btn sm ghost"
+                  phx-click="restore"
+                  phx-value-id={package.id}
+                >
+                  Restore
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% else %>
+        <.topbar
+          title={if @live_action == :new, do: "New package", else: "Edit #{@package.name}"}
+          subtitle="What you sell, and what the client gets."
+        >
+          <:actions>
+            <a class="btn" href={~p"/app/packages"}>Cancel</a>
+          </:actions>
+        </.topbar>
+
+        <div class="panel" style="padding:16px;max-width:680px">
+          <.form for={@form} phx-change="validate" phx-submit="save">
+            <label for="package_name">Name</label>
+            <input
+              type="text"
+              id="package_name"
+              name="package[name]"
+              value={@form[:name].value}
+              placeholder="Full wedding day"
+              required
+            />
+            <.errors field={@form[:name]} />
+
+            <label for="package_summary">One-line summary</label>
+            <input
+              type="text"
+              id="package_summary"
+              name="package[summary]"
+              value={@form[:summary].value}
+              placeholder="Ten hours, two shooters, 600 edited images"
+            />
+
+            <label for="package_price_major">Price</label>
+            <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                id="package_price_major"
+                name="package[price_major]"
+                value={@price_major}
+                placeholder="4500"
+              />
+              <input
+                type="text"
+                name="package[price_currency]"
+                value={@form[:price_currency].value || @current_scope.currency}
+                size="4"
+              />
+            </div>
+            <span class="formhint">
+              Enter it the way you would say it — 4500, not 450000.
+            </span>
+            <.errors field={@form[:price_cents]} />
+
+            <label for="package_deposit_percent">Deposit</label>
+            <input
+              type="number"
+              id="package_deposit_percent"
+              name="package[deposit_percent]"
+              value={@form[:deposit_percent].value}
+              min="0"
+              max="100"
+            />
+            <span class="formhint">Percent of the total, taken at signature.</span>
+            <.errors field={@form[:deposit_percent]} />
+
+            <label for="package_shoot_type">Shoot type</label>
+            <select id="package_shoot_type" name="package[shoot_type]">
+              <option
+                :for={type <- shoot_types()}
+                value={type}
+                selected={type == @form[:shoot_type].value}
+              >
+                {humanise(type)}
+              </option>
+            </select>
+
+            <label for="package_duration_minutes">Duration in minutes</label>
+            <input
+              type="number"
+              id="package_duration_minutes"
+              name="package[duration_minutes]"
+              value={@form[:duration_minutes].value}
+              min="0"
+            />
+
+            <label for="package_crew_size">Crew</label>
+            <input
+              type="number"
+              id="package_crew_size"
+              name="package[crew_size]"
+              value={@form[:crew_size].value}
+              min="1"
+            />
+
+            <label for="package_delivery_days">Delivery in days</label>
+            <input
+              type="number"
+              id="package_delivery_days"
+              name="package[delivery_days]"
+              value={@form[:delivery_days].value}
+              min="1"
+            />
+
+            <label for="package_edited_image_count">Edited images</label>
+            <input
+              type="number"
+              id="package_edited_image_count"
+              name="package[edited_image_count]"
+              value={@form[:edited_image_count].value}
+              min="0"
+            />
+
+            <label for="package_description">Description</label>
+            <textarea id="package_description" name="package[description]" rows="4">{@form[:description].value}</textarea>
+
+            <label style="display:flex;align-items:center;gap:8px;margin-top:14px">
+              <input type="hidden" name="package[public]" value="false" />
+              <input
+                type="checkbox"
+                name="package[public]"
+                value="true"
+                checked={@form[:public].value in [true, "true", nil]}
+                style="width:auto"
+              /> Show on the public booking page
+            </label>
+
+            <button type="submit" class="btn primary">
+              {if @live_action == :new, do: "Create package", else: "Save changes"}
+            </button>
+          </.form>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>
