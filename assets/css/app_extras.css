@@ -4,6 +4,56 @@
    the DOM, so views are always visible. */
 .view { display: block; }
 
+/* The studio wordmark. Sized here rather than inline so the nav and footer stay
+   in step. The source is 2172x724 (3:1) with roughly a quarter of its height as
+   transparent padding, so the mark reads smaller than the box — hence the
+   generous heights. */
+/* flex:none matters: .lnav is a flex row, and at phone width the browser was
+   shrinking the logo horizontally to make room for the links — 34px tall but
+   only 78px wide against a 3:1 source, so the wordmark came out visibly
+   squashed. A distorted logo is worse than a small one. */
+.brand img{width:auto;display:block;flex:none}
+.lnav .brand,.lfoot .brand{flex:none}
+.lnav .brand img{height:48px}
+.lfoot .brand img{height:40px}
+
+/* The reference nav is a single non-wrapping flex row, which at phone width
+   pushed the "Start free trial" button off the edge and left the links
+   unreachable. The section links are same-page anchors and the content sits
+   directly below, so they are dropped on small screens rather than hidden
+   behind a menu; sign-in and the CTA — the two things a visitor came to press —
+   stay. */
+@media (max-width:880px){
+  .lnav{gap:12px;padding:14px 0}
+  .lnav .brand img{height:34px}
+  .lnav a.nl[href^="#"]{display:none}
+  /* design.css drops every .nl below 760px, which takes "Sign in" with it and
+     leaves a returning visitor on a phone with no way into the app. The section
+     links are expendable — that content is directly below — but this one is
+     not, so it is put back. */
+  .lnav a.nl[href^="/"]{display:inline-block}
+  .lnav .theme-btn span{display:none}
+  .lnav .btn.primary{padding:8px 12px;font-size:12.5px}
+}
+
+/* At the narrowest widths sign-in and the trial CTA are what a visitor came
+   for, so the theme toggle gives up its space first — the page still follows
+   the system colour scheme without it. */
+@media (max-width:360px){
+  .lnav .theme-btn{display:none}
+}
+
+
+/* The wordmark is near-black artwork, which all but disappears on the dark
+   ground. Inverting flips it to near-white; the hue-rotate puts the accent dot
+   back to orange, since inverting alone turns it blue. A supplied light variant
+   would be better than a filter — this keeps the logo legible until there is one. */
+:root[data-theme="dark"] .brand img{filter:invert(1) hue-rotate(180deg)}
+
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .brand img{filter:invert(1) hue-rotate(180deg)}
+}
+
 /* Server-rendered flash messages, styled with the design tokens. */
 .flash-group{position:fixed;top:16px;right:16px;z-index:80;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 32px))}
 .flash{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);font-size:13px}
