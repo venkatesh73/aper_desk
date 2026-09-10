@@ -101,13 +101,17 @@ defmodule AperDesk.Fixtures do
   end
 
   def contact_fixture(scope, attrs \\ %{}) do
+    name = Map.get(attrs, "name", "Anna Bell")
+
+    # The email is derived from the name. A fixed default gave every contact an
+    # "anna@..." address, so searching for one name matched all of them and a
+    # search test passed while proving nothing.
+    slug = name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-")
+
     {:ok, contact} =
       AperDesk.Crm.create_contact(
         scope,
-        Map.merge(
-          %{"name" => "Anna Bell", "email" => "#{unique("anna")}@example.com"},
-          attrs
-        )
+        Map.merge(%{"name" => name, "email" => "#{slug}-#{unique()}@example.com"}, attrs)
       )
 
     contact

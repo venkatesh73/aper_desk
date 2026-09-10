@@ -124,6 +124,13 @@ defmodule AperDeskWeb.AppComponents do
         icon: nav_icon(:table)
       },
       %{
+        key: :contacts,
+        label: "Contacts",
+        path: "/app/contacts",
+        permission: :"contact.read",
+        icon: nav_icon(:book)
+      },
+      %{
         key: :calendar,
         label: "Calendar",
         path: "/app/calendar",
@@ -157,6 +164,20 @@ defmodule AperDeskWeb.AppComponents do
         path: "/app/team",
         permission: :"member.read",
         icon: nav_icon(:people)
+      },
+      %{
+        key: :packages,
+        label: "Packages",
+        path: "/app/packages",
+        permission: :"package.read",
+        icon: nav_icon(:box)
+      },
+      %{
+        key: :templates,
+        label: "Templates",
+        path: "/app/templates",
+        permission: :"comms.read",
+        icon: nav_icon(:doc)
       },
       %{
         key: :automations,
@@ -234,6 +255,14 @@ defmodule AperDeskWeb.AppComponents do
 
   defp nav_icon(:bolt),
     do: ~S(<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>)
+
+  defp nav_icon(:book),
+    do:
+      ~S(<svg viewBox="0 0 24 24"><path d="M4 4h12a3 3 0 0 1 3 3v13H7a3 3 0 0 0-3 3z"/><path d="M4 4v16a3 3 0 0 1 3-3h12"/></svg>)
+
+  defp nav_icon(:box),
+    do:
+      ~S(<svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8l9 5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>)
 
   defp nav_icon(:cog),
     do:

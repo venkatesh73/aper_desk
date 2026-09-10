@@ -73,6 +73,16 @@ defmodule AperDesk.Catalog do
     end
   end
 
+  def change_package(package \\ %Package{}, attrs \\ %{}),
+    do: Package.changeset(package, attrs)
+
+  def restore_package(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"package.write"),
+         {:ok, package} <- Scoped.fetch(Package, scope, id) do
+      package |> Ecto.Changeset.change(archived_at: nil) |> Repo.update()
+    end
+  end
+
   @doc "Retire a package. Existing quotes that reference it are unaffected."
   def archive_package(%Scope{} = scope, id) do
     with :ok <- Authorization.authorize(scope, :"package.write"),

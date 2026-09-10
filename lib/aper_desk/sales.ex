@@ -206,6 +206,30 @@ defmodule AperDesk.Sales do
     end
   end
 
+  def fetch_template(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"contract.read") do
+      Scoped.fetch(ContractTemplate, scope, id)
+    end
+  end
+
+  def update_template(%Scope{} = scope, id, attrs) do
+    with :ok <- Authorization.authorize(scope, :"contract.write"),
+         {:ok, template} <- Scoped.fetch(ContractTemplate, scope, id) do
+      template |> ContractTemplate.changeset(attrs) |> Repo.update()
+    end
+  end
+
+  @doc "Retire a template. Contracts already drafted from it are untouched."
+  def archive_template(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"contract.write"),
+         {:ok, template} <- Scoped.fetch(ContractTemplate, scope, id) do
+      template |> Ecto.Changeset.change(archived_at: DateTime.utc_now()) |> Repo.update()
+    end
+  end
+
+  def change_template(template \\ %ContractTemplate{}, attrs \\ %{}),
+    do: ContractTemplate.changeset(template, attrs)
+
   ## Contracts
 
   def fetch_contract(%Scope{} = scope, id) do

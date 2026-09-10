@@ -305,6 +305,28 @@ defmodule AperDesk.Automation do
     end
   end
 
+  def fetch_sequence(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"workflow.read") do
+      case NurtureSequence |> Scoped.for_studio(scope) |> preload(:steps) |> Repo.get(id) do
+        nil -> {:error, :not_found}
+        sequence -> {:ok, sequence}
+      end
+    end
+  end
+
+  def update_sequence(%Scope{} = scope, id, attrs) do
+    with :ok <- Authorization.authorize(scope, :"workflow.write"),
+         {:ok, sequence} <- fetch_sequence(scope, id) do
+      sequence |> NurtureSequence.changeset(attrs) |> Repo.update()
+    end
+  end
+
+  def change_sequence(sequence \\ %NurtureSequence{}, attrs \\ %{}),
+    do: NurtureSequence.changeset(sequence, attrs)
+
+  def change_workflow(workflow \\ %Workflow{}, attrs \\ %{}),
+    do: Workflow.changeset(workflow, attrs)
+
   ## Activity log
 
   @doc "The history a photographer reads, newest first."

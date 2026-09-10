@@ -154,6 +154,52 @@ defmodule AperDesk.Comms do
     end
   end
 
+  def fetch_template(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"comms.read") do
+      Scoped.fetch(EmailTemplate, scope, id)
+    end
+  end
+
+  def update_template(%Scope{} = scope, id, attrs) do
+    with :ok <- Authorization.authorize(scope, :"comms.write"),
+         {:ok, template} <- Scoped.fetch(EmailTemplate, scope, id) do
+      template |> EmailTemplate.changeset(attrs) |> Repo.update()
+    end
+  end
+
+  @doc """
+  Retire a template.
+
+  Archived rather than deleted, because a workflow step references a template by
+  id and deleting one would leave that step pointing at nothing — discovered at
+  6am when the workflow fires.
+  """
+  def archive_template(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"comms.write"),
+         {:ok, template} <- Scoped.fetch(EmailTemplate, scope, id) do
+      template |> Ecto.Changeset.change(archived_at: DateTime.utc_now()) |> Repo.update()
+    end
+  end
+
+  def change_template(template \\ %EmailTemplate{}, attrs \\ %{}),
+    do: EmailTemplate.changeset(template, attrs)
+
+  def fetch_form(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"form.read") do
+      Scoped.fetch(LeadCaptureForm, scope, id)
+    end
+  end
+
+  def update_form(%Scope{} = scope, id, attrs) do
+    with :ok <- Authorization.authorize(scope, :"form.write"),
+         {:ok, form} <- Scoped.fetch(LeadCaptureForm, scope, id) do
+      form |> LeadCaptureForm.changeset(attrs) |> Repo.update()
+    end
+  end
+
+  def change_form(form \\ %LeadCaptureForm{}, attrs \\ %{}),
+    do: LeadCaptureForm.changeset(form, attrs)
+
   def render_template(%Scope{} = scope, key, assigns) do
     case Repo.get_by(EmailTemplate, studio_id: Scope.studio_id(scope), key: key) do
       nil -> {:error, :not_found}

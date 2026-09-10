@@ -61,11 +61,18 @@ defmodule AperDeskWeb.Router do
     live_session :app, on_mount: {AperDeskWeb.LiveAuth, :require_scope} do
       live "/", DashboardLive, :index
       live "/leads", LeadsLive, :index
+      live "/leads/new", LeadLive, :new
+
+      live "/contacts", ContactsLive, :index
+      live "/contacts/new", ContactsLive, :new
+      live "/contacts/:id", ContactsLive, :show
+      live "/contacts/:id/edit", ContactsLive, :edit
+
+      live "/leads/:id", LeadLive, :show
 
       # Routes whose contexts exist but whose screens do not yet. Real routes
       # rather than missing ones, because the sidebar links to them and a 404
       # is a worse answer than saying plainly what is coming.
-      live "/leads/new", SoonLive, :new_lead
       live "/calendar", SoonLive, :calendar
       live "/galleries", SoonLive, :galleries
       live "/quotes", SoonLive, :quotes

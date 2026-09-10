@@ -29,7 +29,7 @@ defmodule AperDesk.Crm do
       {:ok,
        Contact
        |> Scoped.for_studio(scope)
-       |> where([c], is_nil(c.archived_at))
+       |> filter_archived(Keyword.get(opts, :include_archived, false))
        |> search_contacts(opts[:query])
        |> order_by([c], asc: c.name)
        |> Scoped.paginate(opts)
@@ -55,6 +55,41 @@ defmodule AperDesk.Crm do
     with :ok <- Authorization.authorize(scope, :"contact.write"),
          {:ok, contact} <- Scoped.fetch(Contact, scope, id) do
       contact |> Contact.changeset(attrs) |> Repo.update()
+    end
+  end
+
+  @doc """
+  Archive a contact.
+
+  Never deleted: a contact is referenced by every lead, job and invoice they
+  appear on, and removing the row would turn all of that history into a blank.
+  """
+  def archive_contact(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"contact.write"),
+         {:ok, contact} <- Scoped.fetch(Contact, scope, id) do
+      contact |> Ecto.Changeset.change(archived_at: DateTime.utc_now()) |> Repo.update()
+    end
+  end
+
+  def restore_contact(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"contact.write"),
+         {:ok, contact} <- Scoped.fetch(Contact, scope, id) do
+      contact |> Ecto.Changeset.change(archived_at: nil) |> Repo.update()
+    end
+  end
+
+  @doc "A blank or populated changeset, for rendering a contact form."
+  def change_contact(contact \\ %Contact{}, attrs \\ %{}),
+    do: Contact.changeset(contact, attrs)
+
+  @doc "A blank or populated changeset, for rendering a lead form."
+  def change_lead(lead \\ %Lead{}, attrs \\ %{}), do: Lead.changeset(lead, attrs)
+
+  @doc "Everything shown on one lead's page, loaded together."
+  def fetch_lead_detail(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"lead.read"),
+         {:ok, lead} <- Scoped.fetch(Lead, scope, id) do
+      {:ok, Repo.preload(lead, [:contact, :owner])}
     end
   end
 
@@ -327,6 +362,11 @@ defmodule AperDesk.Crm do
       _ -> false
     end)
   end
+
+  # Archived contacts are hidden unless asked for. They are never deleted, so
+  # "show archived" has to be able to reach them or the toggle is a lie.
+  defp filter_archived(query, true), do: query
+  defp filter_archived(query, _false), do: where(query, [c], is_nil(c.archived_at))
 
   defp search_contacts(query, nil), do: query
   defp search_contacts(query, ""), do: query

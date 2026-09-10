@@ -87,7 +87,10 @@
 }
 
 /* Server-rendered flash messages, styled with the design tokens. */
-.flash-group{position:fixed;top:16px;right:16px;z-index:80;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 32px))}
+/* Bottom-right, not top-right: the top right of every screen is where the
+   primary action lives, and a toast parked there covered the button the message
+   was usually telling you to press next. */
+.flash-group{position:fixed;bottom:16px;right:16px;z-index:80;display:flex;flex-direction:column-reverse;gap:8px;max-width:min(380px,calc(100vw - 32px))}
 
 /* The connection banners are rendered hidden and revealed by LiveView when the
    socket drops. `.flash{display:flex}` beats the user agent's `[hidden]` rule

@@ -49,7 +49,7 @@
           </div>
 
           <div :for={lead <- column.leads} class="kcard">
-            <b>{display_name(lead)}</b>
+            <a href={~p"/app/leads/#{lead}"}><b>{display_name(lead)}</b></a>
             <span class="sub">{lead.title}</span>
             <div class="kv">
               <span :if={date_label(@current_scope, lead)} class="mono">
@@ -78,7 +78,7 @@
       </div>
 
       <div :if={not @denied and @leads != [] and @view == :table} class="panel tablewrap">
-        <table class="cmpt">
+        <table>
           <thead>
             <tr>
               <th>Client</th>
@@ -92,7 +92,9 @@
           <tbody>
             <tr :for={lead <- @leads}>
               <td>
-                <b>{display_name(lead)}</b>
+                <a href={~p"/app/leads/#{lead}"}>
+                  <span class="name">{display_name(lead)}</span>
+                </a>
                 <span :if={overdue?(lead)} class="pill bad" style="margin-left:6px">overdue</span>
               </td>
               <td>{String.replace(lead.shoot_type, "_", " ")}</td>

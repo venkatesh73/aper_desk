@@ -1,0 +1,255 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:leads} />
+
+    <div class="main">
+      <%= if @live_action == :new do %>
+        <.topbar title="New lead" subtitle="Only a title is required. The rest can follow.">
+          <:actions>
+            <a class="btn" href={~p"/app/leads"}>Cancel</a>
+          </:actions>
+        </.topbar>
+
+        <div class="panel" style="padding:16px;max-width:680px">
+          <.form for={@form} phx-change="validate" phx-submit="save">
+            <label for="lead_title">What is the enquiry?</label>
+            <input
+              type="text"
+              id="lead_title"
+              name="lead[title]"
+              value={@form[:title].value}
+              placeholder="Summer wedding at Villa Rosa"
+              required
+            />
+            <.errors field={@form[:title]} />
+
+            <label for="lead_contact_id">Client</label>
+            <select id="lead_contact_id" name="lead[contact_id]">
+              <option value="">Not linked to a contact yet</option>
+              <option
+                :for={contact <- @contacts}
+                value={contact.id}
+                selected={contact.id == @form[:contact_id].value}
+              >
+                {contact.name}{if contact.email, do: " · #{contact.email}"}
+              </option>
+            </select>
+            <span class="formhint">
+              <a href={~p"/app/contacts/new"} style="color:var(--accent-text)">Add a contact</a>
+              first if they are not listed.
+            </span>
+
+            <label for="lead_shoot_type">Shoot type</label>
+            <select id="lead_shoot_type" name="lead[shoot_type]">
+              <option
+                :for={type <- shoot_types()}
+                value={type}
+                selected={type == @form[:shoot_type].value}
+              >
+                {humanise(type)}
+              </option>
+            </select>
+
+            <label for="lead_desired_date">Shoot date</label>
+            <input
+              type="date"
+              id="lead_desired_date"
+              name="lead[desired_date]"
+              value={@form[:desired_date].value}
+            />
+            <.errors field={@form[:desired_date]} />
+
+            <label for="lead_location">Venue or location</label>
+            <input
+              type="text"
+              id="lead_location"
+              name="lead[location]"
+              value={@form[:location].value}
+            />
+
+            <label for="lead_guest_count">Guests</label>
+            <input
+              type="number"
+              id="lead_guest_count"
+              name="lead[guest_count]"
+              value={@form[:guest_count].value}
+              min="0"
+            />
+            <.errors field={@form[:guest_count]} />
+
+            <label for="lead_budget_cents">Budget</label>
+            <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
+              <input
+                type="number"
+                id="lead_budget_cents"
+                name="lead[budget_cents]"
+                value={@form[:budget_cents].value}
+                min="0"
+                placeholder="In minor units, e.g. 450000 for 4,500"
+              />
+              <input
+                type="text"
+                name="lead[budget_currency]"
+                value={@form[:budget_currency].value || @current_scope.currency}
+                size="4"
+              />
+            </div>
+            <span class="formhint">
+              Amounts are stored in minor units, so 4,500 is entered as 450000.
+            </span>
+
+            <label for="lead_source">Where did it come from?</label>
+            <select id="lead_source" name="lead[source]">
+              <option
+                :for={source <- sources()}
+                value={source}
+                selected={source == @form[:source].value}
+              >
+                {humanise(source)}
+              </option>
+            </select>
+
+            <button type="submit" class="btn primary">Create lead</button>
+          </.form>
+        </div>
+      <% else %>
+        <.topbar title={display_name(@lead)} subtitle={@lead.title}>
+          <:actions>
+            <a class="btn" href={~p"/app/leads"}>All leads</a>
+            <button
+              :if={is_nil(@lead.first_responded_at)}
+              class="btn"
+              phx-click="replied"
+            >
+              I have replied
+            </button>
+            <button
+              :if={next_stage(@lead)}
+              class="btn primary"
+              phx-click="move"
+              phx-value-stage={next_stage(@lead)}
+            >
+              Move to {humanise(next_stage(@lead))}
+            </button>
+          </:actions>
+        </.topbar>
+
+        <div class="stats">
+          <.stat label="Stage" value={humanise(@lead.stage)} />
+          <.stat
+            label="Shoot date"
+            value={shoot_date(@current_scope, @lead) || "Not set"}
+          />
+          <.stat label="Value" value={value(@lead) || "—"} />
+          <.stat
+            label="First reply"
+            value={if @lead.first_responded_at, do: "Sent", else: "Waiting"}
+            detail={
+              if overdue?(@lead), do: "past the SLA", else: time_ago(@lead.first_response_due_at)
+            }
+            tone={if overdue?(@lead), do: :down, else: :neutral}
+          />
+        </div>
+
+        <div class="dash">
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="panel">
+              <div class="ph-head">
+                <h3>The enquiry</h3>
+              </div>
+              <div class="kv" style="padding:12px 14px">
+                <span>Client</span>
+                <span>
+                  <a :if={@lead.contact} href={~p"/app/contacts/#{@lead.contact}"}>
+                    {@lead.contact.name}
+                  </a>
+                  <span :if={is_nil(@lead.contact)} style="color:var(--faint)">Not linked</span>
+                </span>
+                <span>Email</span>
+                <span>{(@lead.contact && @lead.contact.email) || "—"}</span>
+                <span>Shoot type</span><span>{humanise(@lead.shoot_type)}</span>
+                <span>Venue</span><span>{@lead.location || "—"}</span>
+                <span>Guests</span><span>{@lead.guest_count || "—"}</span>
+                <span>Source</span><span>{humanise(@lead.source)}</span>
+                <span>Owner</span>
+                <span>{(@lead.owner && @lead.owner.name) || "Unassigned"}</span>
+                <span :if={@lead.lost_reason}>Lost because</span>
+                <span :if={@lead.lost_reason}>{@lead.lost_reason}</span>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Activity</h3>
+              </div>
+              <div :if={@activity != []} class="list">
+                <div :for={entry <- @activity} class="it">
+                  <span class="dot"></span>
+                  <span>
+                    <b>{entry.summary}</b>
+                    <span :if={entry.reason} class="sub">{entry.reason}</span>
+                  </span>
+                  <span class="t">{time_ago(entry.occurred_at)}</span>
+                </div>
+              </div>
+              <.empty
+                :if={@activity == []}
+                title="Nothing logged yet"
+                body="Every change to this lead will appear here, with the reason."
+              />
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Before this can be booked</h3>
+              </div>
+              <div class="list">
+                <div :for={item <- readiness(@lead)} class="it">
+                  <span class={["dot", not item.done && "off"]}></span>
+                  <span><b>{item.label}</b></span>
+                  <span class="t">{if item.done, do: "done", else: "to do"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Move the lead</h3>
+              </div>
+              <div style="padding:12px 14px;display:flex;flex-wrap:wrap;gap:6px">
+                <button
+                  :for={stage <- stages()}
+                  :if={stage not in ["lost"] and stage != @lead.stage}
+                  class="chip"
+                  phx-click="move"
+                  phx-value-stage={stage}
+                >
+                  {humanise(stage)}
+                </button>
+              </div>
+
+              <div :if={@lead.stage != "lost"} style="padding:0 14px 14px">
+                <.form for={%{}} as={:lost} phx-submit="lose">
+                  <label for="lost_reason">Or mark it lost</label>
+                  <input
+                    type="text"
+                    id="lost_reason"
+                    name="lost[reason]"
+                    placeholder="Chose another photographer"
+                    required
+                  />
+                  <span class="formhint">
+                    A reason is required, so the pipeline stays worth reading.
+                  </span>
+                  <button type="submit" class="btn sm" style="margin-top:8px">Mark lost</button>
+                </.form>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>

@@ -1,0 +1,243 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:contacts} />
+
+    <div class="main">
+      <%= case @live_action do %>
+        <% :index -> %>
+          <.topbar title="Contacts" subtitle={"#{length(@contacts)} in the address book"}>
+            <:actions>
+              <form phx-change="search" phx-submit="search">
+                <input
+                  type="search"
+                  name="query"
+                  value={@query}
+                  placeholder="Search name, email or company"
+                  autocomplete="off"
+                />
+              </form>
+              <button
+                class="btn sm"
+                phx-click="toggle-archived"
+                aria-pressed={to_string(@show_archived)}
+              >
+                {if @show_archived, do: "Hide archived", else: "Show archived"}
+              </button>
+              <a class="btn primary" href={~p"/app/contacts/new"}>+ New contact</a>
+            </:actions>
+          </.topbar>
+
+          <.empty
+            :if={@denied}
+            title="You do not have access to contacts"
+            body="Ask an owner to change your role if you need it."
+          />
+
+          <.empty
+            :if={not @denied and @contacts == []}
+            title={if @query == "", do: "No contacts yet", else: "Nothing matched that search"}
+            body={
+              if @query == "",
+                do: "Add one by hand, or let an enquiry create it for you.",
+                else: nil
+            }
+          />
+
+          <div :if={not @denied and @contacts != []} class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Prefers</th>
+                  <th>Added</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={contact <- @contacts}>
+                  <td>
+                    <a href={~p"/app/contacts/#{contact}"}>
+                      <span class="name">{contact.name}</span>
+                    </a>
+                    <span :if={contact.company} class="sub">{contact.company}</span>
+                    <span :if={contact.archived_at} class="pill">archived</span>
+                  </td>
+                  <td>{contact.email || "—"}</td>
+                  <td>{contact.phone || "—"}</td>
+                  <td>{channel_label(contact.preferred_channel)}</td>
+                  <td class="mono">{added_on(@current_scope, contact)}</td>
+                  <td style="text-align:right">
+                    <a class="btn sm" href={~p"/app/contacts/#{contact}/edit"}>Edit</a>
+                    <button
+                      :if={is_nil(contact.archived_at)}
+                      class="btn sm ghost"
+                      phx-click="archive"
+                      phx-value-id={contact.id}
+                      data-confirm={"Archive #{contact.name}? Their history stays intact."}
+                    >
+                      Archive
+                    </button>
+                    <button
+                      :if={contact.archived_at}
+                      class="btn sm ghost"
+                      phx-click="restore"
+                      phx-value-id={contact.id}
+                    >
+                      Restore
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        <% :show -> %>
+          <.topbar title={@contact.name} subtitle={@contact.company}>
+            <:actions>
+              <a class="btn" href={~p"/app/contacts"}>All contacts</a>
+              <a class="btn primary" href={~p"/app/contacts/#{@contact}/edit"}>Edit</a>
+            </:actions>
+          </.topbar>
+
+          <div class="grid2">
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Details</h3>
+              </div>
+              <div class="kv" style="padding:12px 14px">
+                <span>Email</span><span>{@contact.email || "—"}</span>
+                <span>Phone</span><span>{@contact.phone || "—"}</span>
+                <span>Prefers</span><span>{channel_label(@contact.preferred_channel)}</span>
+                <span>Company</span><span>{@contact.company || "—"}</span>
+                <span>Source</span><span>{@contact.source || "—"}</span>
+                <span>Marketing</span>
+                <span>{if @contact.marketing_opt_in, do: "Opted in", else: "Not opted in"}</span>
+                <span>Added</span><span>{added_on(@current_scope, @contact)}</span>
+              </div>
+              <div :if={@contact.notes} style="padding:0 14px 14px">
+                <span class="eyebrow">Notes</span>
+                <p style="margin:4px 0 0;color:var(--muted);font-size:13px">{@contact.notes}</p>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Their enquiries</h3>
+                <span class="spacer"></span>
+                <span class="n">{length(@leads)}</span>
+              </div>
+              <div :if={@leads != []} class="list">
+                <a :for={lead <- @leads} class="it" href={~p"/app/leads/#{lead}"}>
+                  <span class="dot"></span>
+                  <span>
+                    <b>{lead.title}</b>
+                    <span class="sub">{String.replace(lead.stage, "_", " ")}</span>
+                  </span>
+                </a>
+              </div>
+              <.empty
+                :if={@leads == []}
+                title="No enquiries yet"
+                body="Leads from this contact will be listed here."
+              />
+            </div>
+          </div>
+        <% action when action in [:new, :edit] -> %>
+          <.topbar
+            title={if @live_action == :new, do: "New contact", else: "Edit #{@contact.name}"}
+            subtitle="Everything except a name is optional."
+          >
+            <:actions>
+              <a class="btn" href={~p"/app/contacts"}>Cancel</a>
+            </:actions>
+          </.topbar>
+
+          <div class="panel" style="padding:16px;max-width:640px">
+            <.form for={@form} phx-change="validate" phx-submit="save">
+              <label for="contact_name">Name</label>
+              <input
+                type="text"
+                id="contact_name"
+                name="contact[name]"
+                value={@form[:name].value}
+                autocomplete="name"
+                required
+              />
+              <.errors field={@form[:name]} />
+
+              <label for="contact_partner_name">Partner name</label>
+              <input
+                type="text"
+                id="contact_partner_name"
+                name="contact[partner_name]"
+                value={@form[:partner_name].value}
+              />
+              <span class="formhint">For couples, so both names appear on the quote.</span>
+
+              <label for="contact_email">Email</label>
+              <input
+                type="email"
+                id="contact_email"
+                name="contact[email]"
+                value={@form[:email].value}
+                autocomplete="email"
+              />
+              <.errors field={@form[:email]} />
+
+              <label for="contact_phone">Phone</label>
+              <input
+                type="tel"
+                id="contact_phone"
+                name="contact[phone]"
+                value={@form[:phone].value}
+                autocomplete="tel"
+              />
+
+              <label for="contact_company">Company</label>
+              <input
+                type="text"
+                id="contact_company"
+                name="contact[company]"
+                value={@form[:company].value}
+                autocomplete="organization"
+              />
+
+              <label for="contact_preferred_channel">Prefers to be contacted by</label>
+              <select id="contact_preferred_channel" name="contact[preferred_channel]">
+                <option
+                  :for={channel <- channels()}
+                  value={channel}
+                  selected={channel == @form[:preferred_channel].value}
+                >
+                  {channel_label(channel)}
+                </option>
+              </select>
+
+              <label for="contact_notes">Notes</label>
+              <textarea id="contact_notes" name="contact[notes]" rows="4">{@form[:notes].value}</textarea>
+
+              <label style="display:flex;align-items:center;gap:8px;margin-top:14px">
+                <input
+                  type="hidden"
+                  name="contact[marketing_opt_in]"
+                  value="false"
+                />
+                <input
+                  type="checkbox"
+                  name="contact[marketing_opt_in]"
+                  value="true"
+                  checked={@form[:marketing_opt_in].value in [true, "true"]}
+                  style="width:auto"
+                /> They agreed to marketing email
+              </label>
+
+              <button type="submit" class="btn primary">
+                {if @live_action == :new, do: "Add contact", else: "Save changes"}
+              </button>
+            </.form>
+          </div>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>
