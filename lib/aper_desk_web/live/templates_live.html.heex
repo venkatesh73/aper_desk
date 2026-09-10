@@ -227,7 +227,8 @@
             </.section>
 
             <.section :if={@kind in ["email", "contract"]} title="When to offer it">
-              <.select_field
+              <.combo_field
+                id="template-shoot-type"
                 field={@form[:shoot_type]}
                 label="Shoot type"
                 options={Enum.map(shoot_types(), &{humanise(&1), &1})}

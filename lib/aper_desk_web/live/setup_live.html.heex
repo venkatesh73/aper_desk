@@ -30,12 +30,16 @@
             />
           </.row>
 
-          <.select_field
+          <.combo_field
             field={@form[:time_zone]}
+            id="setup-time-zone"
             label="Time zone"
             options={Enum.map(@time_zones, &{String.replace(&1, "_", " "), &1})}
-            hint="Shoot times and reply targets are shown in this zone."
-            required
+            hint="Shoot times and reply targets are shown in this zone. Detected from your browser."
+            prompt="Choose a time zone"
+            search_placeholder="Search cities and regions"
+            empty_message="No time zone matched"
+            allow_clear={false}
           />
         </.section>
 

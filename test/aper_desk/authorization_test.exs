@@ -58,6 +58,27 @@ defmodule AperDesk.AuthorizationTest do
     assert Authorization.authorize(Scope.public(), :"lead.read") == {:error, :unauthorized}
   end
 
+  test "every stored role maps to an atom without depending on module load order" do
+    # `String.to_existing_atom/1` raised here whenever this path ran before the
+    # module declaring the atom had loaded — which is exactly what happens on a
+    # cold node, and made signing in fail.
+    for role <- Membership.roles() do
+      assert scope(role).role == String.to_atom(role)
+    end
+  end
+
+  test "an unrecognised role grants nothing" do
+    unknown =
+      Scope.for_membership(
+        %User{id: Ecto.UUID.generate(), name: "T"},
+        %Studio{id: Ecto.UUID.generate(), base_currency: "USD", time_zone: "Etc/UTC"},
+        %Membership{role: "sysadmin"}
+      )
+
+    assert unknown.role == nil
+    refute Authorization.can?(unknown, :"lead.read")
+  end
+
   test "a platform admin bypasses the table" do
     assert Authorization.can?(%Scope{platform_admin?: true}, :"billing.write")
   end

@@ -10,6 +10,7 @@ defmodule AperDeskWeb.CatalogScreensTest do
   use AperDeskWeb.ConnCase, async: true
 
   import AperDesk.Fixtures
+  import AperDeskWeb.ComboboxHelpers
   import Ecto.Query
   import Phoenix.LiveViewTest
 
@@ -164,26 +165,19 @@ defmodule AperDeskWeb.CatalogScreensTest do
 
     # The template is chosen through the combobox rather than a select, so the
     # test drives it the way a person would: open, pick, submit.
-    defp choose_template(view, template) do
-      view |> element("#workflow-template .combo-button") |> render_click()
-
-      view
-      |> element("#workflow-template .combo-option", template.name)
-      |> render_click()
+    # Both the trigger and the template are searchable pickers now, so the test
+    # drives them the way a person would.
+    defp choose_workflow_basics(view, template) do
+      choose(view, "workflow-trigger", "Lead created")
+      choose(view, "workflow-template", template.name)
     end
 
     test "creates a workflow with its first step", %{conn: conn, scope: scope, template: template} do
       {:ok, view, _html} = live(conn, ~p"/app/automations/new")
-      choose_template(view, template)
+      choose_workflow_basics(view, template)
 
       view
-      |> form("form",
-        workflow: %{
-          name: "Reply to new leads",
-          trigger_event: "lead.created",
-          approval_mode: "ask"
-        }
-      )
+      |> form("form", workflow: %{name: "Reply to new leads", approval_mode: "ask"})
       |> render_submit()
 
       assert {:ok, [workflow]} = Automation.list_workflows(scope)
@@ -201,11 +195,9 @@ defmodule AperDeskWeb.CatalogScreensTest do
       template: template
     } do
       {:ok, view, _html} = live(conn, ~p"/app/automations/new")
-      choose_template(view, template)
+      choose_workflow_basics(view, template)
 
-      view
-      |> form("form", workflow: %{name: "W", trigger_event: "lead.created"})
-      |> render_submit()
+      view |> form("form", workflow: %{name: "W"}) |> render_submit()
 
       {:ok, [workflow]} = Automation.list_workflows(scope)
       refute workflow.active, "a rule must not start running before anyone has read it"
@@ -215,10 +207,8 @@ defmodule AperDeskWeb.CatalogScreensTest do
     test "refuses to create one with no template chosen", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/app/automations/new")
 
-      html =
-        view
-        |> form("form", workflow: %{name: "W", trigger_event: "lead.created"})
-        |> render_submit()
+      choose(view, "workflow-trigger", "Lead created")
+      html = view |> form("form", workflow: %{name: "W"}) |> render_submit()
 
       assert html =~ "Choose the template"
     end

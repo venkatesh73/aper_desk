@@ -49,12 +49,30 @@ defmodule AperDesk.Scope do
       user: user,
       studio: studio,
       membership: membership,
-      role: String.to_existing_atom(membership.role),
+      role: role_atom(membership.role),
       platform_admin?: user.platform_admin,
       currency: studio.base_currency,
       time_zone: studio.time_zone
     }
   end
+
+  # Mapped explicitly rather than with `String.to_existing_atom/1`.
+  #
+  # That function is the right instinct — never build an atom from a database
+  # value — but it depends on the atom already existing, which depends on
+  # whichever module declares it having been loaded. On a cold node, or in a
+  # test that touches this path before it touches `AperDesk.Authorization`,
+  # signing in raised `ArgumentError: not an already existing atom`. An explicit
+  # table has no load-order dependency and no way to fail.
+  #
+  # An unrecognised role resolves to nil, which every permission check reads as
+  # "no permissions" — the safe direction to fail.
+  defp role_atom("owner"), do: :owner
+  defp role_atom("photographer"), do: :photographer
+  defp role_atom("finance"), do: :finance
+  defp role_atom("hr"), do: :hr
+  defp role_atom("ops"), do: :ops
+  defp role_atom(_unknown), do: nil
 
   @doc "The studio id, or nil for an anonymous scope."
   def studio_id(%__MODULE__{studio: nil}), do: nil

@@ -122,6 +122,51 @@ defmodule AperDeskWeb.FormComponents do
     """
   end
 
+  @doc """
+  A searchable picker inside a labelled field.
+
+  Use this instead of `select_field/1` once a list is long enough that scanning
+  it stops being reasonable — roughly ten options, or any list that grows with
+  the studio's data. Below that a native select is better: it is lighter, it
+  needs no round trip, and a search box over three options is friction.
+
+  ## Example
+
+      <.combo_field
+        field={@form[:shoot_type]}
+        id="lead-shoot-type"
+        label="Shoot type"
+        options={Enum.map(shoot_types(), &{humanise(&1), &1})}
+      />
+  """
+  attr :field, Phoenix.HTML.FormField, required: true
+  attr :id, :string, required: true
+  attr :label, :string, default: nil
+  attr :hint, :string, default: nil
+  attr :options, :list, required: true
+  attr :prompt, :string, default: "Choose one"
+  attr :search_placeholder, :string, default: "Type to search"
+  attr :empty_message, :string, default: "Nothing matched"
+  attr :allow_clear, :boolean, default: true
+
+  def combo_field(assigns) do
+    ~H"""
+    <.field label={@label} hint={@hint} field={@field}>
+      <.live_component
+        module={AperDeskWeb.Combobox}
+        id={@id}
+        name={@field.name}
+        value={@field.value}
+        options={@options}
+        prompt={@prompt}
+        search_placeholder={@search_placeholder}
+        empty_message={@empty_message}
+        allow_clear={@allow_clear}
+      />
+    </.field>
+    """
+  end
+
   @doc "A checkbox that reads as one line, with the hidden false companion."
   attr :field, Phoenix.HTML.FormField, required: true
   attr :label, :string, required: true

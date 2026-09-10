@@ -109,7 +109,8 @@
                 label="One-line summary"
                 placeholder="Ten hours, two shooters, 600 edited images"
               />
-              <.select_field
+              <.combo_field
+                id="package-shoot-type"
                 field={@form[:shoot_type]}
                 label="Shoot type"
                 options={Enum.map(shoot_types(), &{humanise(&1), &1})}

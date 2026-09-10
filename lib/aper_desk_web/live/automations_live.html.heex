@@ -140,12 +140,15 @@
                   placeholder="Reply to new wedding enquiries"
                   required
                 />
-                <.select_field
+                <.combo_field
                   field={@form[:trigger_event]}
+                  id="workflow-trigger"
                   label="When this happens"
                   options={Enum.map(trigger_events(), &{humanise(&1), &1})}
                   prompt="Choose a trigger"
-                  required
+                  search_placeholder="Search triggers"
+                  empty_message="No trigger matched"
+                  allow_clear={false}
                 />
               </.section>
 

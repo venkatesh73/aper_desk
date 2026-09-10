@@ -2,6 +2,7 @@ defmodule AperDeskWeb.LeadLiveTest do
   use AperDeskWeb.ConnCase, async: true
 
   import AperDesk.Fixtures
+  import AperDeskWeb.ComboboxHelpers
   import Ecto.Query
   import Phoenix.LiveViewTest
 
@@ -29,11 +30,10 @@ defmodule AperDeskWeb.LeadLiveTest do
   describe "creating" do
     test "creates a lead and opens it", %{conn: conn, studio: studio} do
       {:ok, view, _html} = live(conn, ~p"/app/leads/new")
+      choose(view, "lead-shoot-type", "Wedding")
 
       assert {:error, {:live_redirect, %{to: path}}} =
-               view
-               |> form("form", lead: %{title: "Summer wedding", shoot_type: "wedding"})
-               |> render_submit()
+               view |> form("form", lead: %{title: "Summer wedding"}) |> render_submit()
 
       assert path =~ "/app/leads/"
       assert [lead] = Repo.all(from l in Lead, where: l.studio_id == ^studio.id)

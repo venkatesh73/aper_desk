@@ -11,6 +11,7 @@ defmodule AperDeskWeb.SetupLiveTest do
 
   import AperDesk.DataCase, only: [errors_on: 1]
   import AperDesk.Fixtures
+  import AperDeskWeb.ComboboxHelpers
   import Phoenix.LiveViewTest
 
   alias AperDesk.Accounts
@@ -27,12 +28,13 @@ defmodule AperDeskWeb.SetupLiveTest do
     |> Plug.Conn.put_session(:studio_id, studio.id)
   end
 
+  # The time zone is chosen through the combobox, so it is not in the form
+  # params. The changeset-level tests add it back explicitly.
   defp valid_setup(overrides \\ %{}) do
     Map.merge(
       %{
         "city" => "Zurich",
         "country_code" => "CH",
-        "time_zone" => "Europe/Zurich",
         "base_currency" => "EUR",
         "date_format" => "dmy",
         "time_format" => "24h",
@@ -92,6 +94,7 @@ defmodule AperDeskWeb.SetupLiveTest do
 
     test "saves the answers and lets the app through", %{conn: conn, studio: studio} do
       {:ok, view, _html} = live(conn, ~p"/app/setup")
+      choose(view, "setup-time-zone", "Europe/Zurich")
 
       assert {:error, {:live_redirect, %{to: "/app"}}} =
                view |> form("form", setup: valid_setup()) |> render_submit()
@@ -113,6 +116,7 @@ defmodule AperDeskWeb.SetupLiveTest do
 
     test "shows a worked example of the chosen date format", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/app/setup")
+      choose(view, "setup-time-zone", "Europe/Zurich")
 
       dmy = view |> form("form", setup: valid_setup(%{"date_format" => "dmy"})) |> render_change()
       assert dmy =~ "10/09/2026"
@@ -148,6 +152,7 @@ defmodule AperDeskWeb.SetupLiveTest do
       membership |> Ecto.Changeset.change(role: "photographer") |> Repo.update!()
 
       {:ok, view, _html} = conn |> sign_in(user, studio) |> live(~p"/app/setup")
+      choose(view, "setup-time-zone", "Europe/Zurich")
       html = view |> form("form", setup: valid_setup()) |> render_submit()
 
       assert html =~ "Only an owner"
@@ -173,19 +178,29 @@ defmodule AperDeskWeb.SetupLiveTest do
     end
 
     test "refuses a currency the product does not sell in", %{studio: studio} do
-      changeset = Studio.setup_changeset(studio, valid_setup(%{"base_currency" => "XYZ"}))
+      changeset =
+        Studio.setup_changeset(
+          studio,
+          valid_setup(%{"base_currency" => "XYZ", "time_zone" => "Europe/Zurich"})
+        )
+
       refute changeset.valid?
       assert errors_on(changeset).base_currency != []
     end
 
     test "refuses a malformed country code", %{studio: studio} do
-      changeset = Studio.setup_changeset(studio, valid_setup(%{"country_code" => "Switzerland"}))
+      changeset =
+        Studio.setup_changeset(
+          studio,
+          valid_setup(%{"country_code" => "Switzerland", "time_zone" => "Europe/Zurich"})
+        )
+
       refute changeset.valid?
       assert "must be a two-letter country code" in errors_on(changeset).country_code
     end
 
     test "stamps setup as completed", %{studio: studio} do
-      changeset = Studio.setup_changeset(studio, valid_setup())
+      changeset = Studio.setup_changeset(studio, valid_setup(%{"time_zone" => "Europe/Zurich"}))
       assert changeset.valid?
       assert Ecto.Changeset.get_change(changeset, :setup_completed_at)
     end

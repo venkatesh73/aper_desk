@@ -40,10 +40,14 @@
                 </:hint_block>
               </.field>
 
-              <.select_field
+              <.combo_field
                 field={@form[:shoot_type]}
+                id="lead-shoot-type"
                 label="Shoot type"
                 options={Enum.map(shoot_types(), &{humanise(&1), &1})}
+                prompt="Choose a shoot type"
+                search_placeholder="Search shoot types"
+                allow_clear={false}
               />
             </.section>
 
@@ -77,10 +81,14 @@
             </.section>
 
             <.section title="Where it came from">
-              <.select_field
+              <.combo_field
                 field={@form[:source]}
+                id="lead-source"
                 label="Source"
                 options={Enum.map(sources(), &{humanise(&1), &1})}
+                prompt="Choose a source"
+                search_placeholder="Search sources"
+                allow_clear={false}
               />
             </.section>
 
