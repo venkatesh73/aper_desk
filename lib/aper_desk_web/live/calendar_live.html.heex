@@ -1,0 +1,247 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:calendar} />
+
+    <div class="main">
+      <%= if @live_action == :index do %>
+        <.topbar title="Calendar" subtitle={month_label(@month)}>
+          <:actions>
+            <span :if={@clashes != []} class="pill bad">
+              <span class="dot bad"></span>
+              {length(@clashes)} clash{if length(@clashes) != 1, do: "es"}
+            </span>
+            <a class="btn primary" href={~p"/app/calendar/new"}>+ New shoot</a>
+          </:actions>
+        </.topbar>
+
+        <div class="chips" style="margin-bottom:12px">
+          <button
+            class="chip"
+            aria-pressed={to_string(is_nil(@shooter_id))}
+            phx-click="shooter"
+            phx-value-id=""
+          >
+            Everyone
+          </button>
+          <button
+            :for={member <- @members}
+            class="chip"
+            aria-pressed={to_string(@shooter_id == member.user_id)}
+            phx-click="shooter"
+            phx-value-id={member.user_id}
+          >
+            {(member.user && member.user.name) || "Unknown"}
+          </button>
+        </div>
+
+        <div class="cal">
+          <div class="month">
+            <div class="mh">
+              <a
+                class="btn icon ghost sm"
+                href={
+                  ~p"/app/calendar?year=#{prev_month(@month).year}&month=#{prev_month(@month).month}"
+                }
+              >
+                ‹
+              </a>
+              <h3>{month_label(@month)}</h3>
+              <a
+                class="btn icon ghost sm"
+                href={
+                  ~p"/app/calendar?year=#{next_month(@month).year}&month=#{next_month(@month).month}"
+                }
+              >
+                ›
+              </a>
+              <span class="spacer"></span>
+              <span class="ev">Booked</span>
+              <span class="ev hold">Hold</span>
+              <span class="ev travel">Travel</span>
+              <span class="ev clash">Clash</span>
+            </div>
+
+            <div class="dow">
+              <span :for={name <- weekday_names(@current_scope)}>{name}</span>
+            </div>
+
+            <div class="days">
+              <div
+                :for={cell <- @cells}
+                class={["day", not cell.in_month && "dim", cell.today && "today"]}
+              >
+                <span class="dn">{cell.date.day}</span>
+                <span :for={event <- cell.events} class={["ev", event.kind]} title={event.label}>
+                  {event.label}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="ph-head">
+              <h3>Clashes to resolve</h3>
+            </div>
+            <div :if={@clashes != []} class="list">
+              <div :for={clash <- @clashes} class="it" style="align-items:flex-start">
+                <span class="dot bad" style="margin-top:6px"></span>
+                <span style="flex:1;min-width:0">
+                  <b>{clash_when(@current_scope, clash)}</b>
+                  · {(clash.user && clash.user.name) || "Unassigned"}
+                  <span class="sub">
+                    {event_label_for(clash.first)} vs {event_label_for(clash.second)}
+                  </span>
+                </span>
+              </div>
+            </div>
+            <.empty
+              :if={@clashes == []}
+              title="Nothing double-booked"
+              body="A pencilled date sitting on top of someone's booked work would appear here."
+            />
+
+            <div class="hr"></div>
+            <div class="ph-head">
+              <h3>Holds expiring</h3>
+            </div>
+            <div :if={@holds != []} class="list">
+              <div :for={hold <- @holds} class="it">
+                <span class="dot warn"></span>
+                <span style="flex:1;min-width:0">
+                  <b>{hold_label(hold)}</b>
+                  <span class="sub">
+                    {(hold.user && hold.user.name) || "Unassigned"} · {hold_expires(
+                      @current_scope,
+                      hold
+                    )}
+                  </span>
+                </span>
+                <button class="btn sm ghost" phx-click="release-hold" phx-value-id={hold.id}>
+                  Release
+                </button>
+              </div>
+            </div>
+            <.empty :if={@holds == []} title="No holds about to lapse" />
+
+            <div class="hr"></div>
+            <div class="ph-head">
+              <h3>Travel</h3>
+            </div>
+            <div :if={@travel != []} class="list">
+              <div :for={item <- @travel} class="it">
+                <span class="dot warn"></span>
+                <span style="flex:1;min-width:0">
+                  <b>{event_label_for(item)}</b>
+                  <span class="sub">{(item.user && item.user.name) || "Unassigned"}</span>
+                </span>
+              </div>
+            </div>
+            <.empty :if={@travel == []} title="No travel days this month" />
+          </div>
+        </div>
+      <% else %>
+        <.topbar
+          title="New shoot"
+          subtitle="Booking it reserves the crew's time, travel included."
+        >
+          <:actions>
+            <a class="btn" href={~p"/app/calendar"}>Cancel</a>
+          </:actions>
+        </.topbar>
+
+        <div class="formpanel">
+          <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+            <.section title="The shoot">
+              <.text_field
+                field={@form[:title]}
+                label="What is it?"
+                placeholder="Anna and Ben — wedding"
+                required
+              />
+
+              <.combo_field
+                id="shoot-type"
+                field={@form[:shoot_type]}
+                label="Shoot type"
+                options={Enum.map(shoot_types(), &{humanise(&1), &1})}
+              />
+
+              <.row layout="two">
+                <.text_field
+                  field={@form[:starts_at]}
+                  label="Starts"
+                  type="datetime-local"
+                  value={datetime_input(@current_scope, @form[:starts_at].value)}
+                  required
+                />
+                <.text_field
+                  field={@form[:ends_at]}
+                  label="Ends"
+                  type="datetime-local"
+                  value={datetime_input(@current_scope, @form[:ends_at].value)}
+                  required
+                />
+              </.row>
+              <.errors field={@form[:ends_at]} />
+            </.section>
+
+            <.section
+              title="Who is shooting it"
+              description="Their time is reserved, and the database refuses a double booking."
+            >
+              <.field label="Crew">
+                <.live_component
+                  module={AperDeskWeb.Combobox}
+                  id="shoot-crew"
+                  name="job[crew_id]"
+                  value={@crew_id}
+                  options={member_options(@members)}
+                  prompt="Decide later"
+                  search_placeholder="Search the team"
+                  empty_message="Nobody by that name"
+                />
+              </.field>
+
+              <div :if={@clash} class="hint" style="border-color:var(--bad)">
+                <b style="color:var(--bad)">Already committed</b>
+                <span style="display:block;margin-top:2px">
+                  {@clash}. Pick someone else, or change the time.
+                </span>
+              </div>
+
+              <.row layout="two">
+                <.text_field
+                  field={@form[:travel_before_minutes]}
+                  label="Travel before (minutes)"
+                  type="number"
+                  min="0"
+                  hint="Reserved as well as the shoot itself."
+                />
+                <.text_field
+                  field={@form[:travel_after_minutes]}
+                  label="Travel after (minutes)"
+                  type="number"
+                  min="0"
+                />
+              </.row>
+            </.section>
+
+            <.section title="Where">
+              <.text_field field={@form[:venue_name]} label="Venue" />
+              <.row layout="two">
+                <.text_field field={@form[:city]} label="City" />
+                <.text_field field={@form[:venue_address]} label="Address" />
+              </.row>
+              <.textarea_field field={@form[:venue_notes]} label="Venue notes" rows={3} />
+            </.section>
+
+            <.form_actions>
+              <button type="submit" class="btn primary">Book the shoot</button>
+              <a class="btn ghost" href={~p"/app/calendar"}>Cancel</a>
+            </.form_actions>
+          </.form>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>

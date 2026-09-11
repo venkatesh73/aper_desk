@@ -16,11 +16,14 @@ defmodule AperDesk.Scheduling.TstzRange do
   def load(%Postgrex.Range{} = range), do: {:ok, from_range(range)}
   def load(_), do: :error
 
+  # Shifted to UTC on the way out. Postgres stores an instant either way, but
+  # the driver refuses a zoned DateTime outright, so a caller building a range
+  # from a studio-local time would otherwise crash rather than round-trip.
   def dump({%DateTime{} = from, %DateTime{} = to}) do
     {:ok,
      %Postgrex.Range{
-       lower: from,
-       upper: to,
+       lower: utc(from),
+       upper: utc(to),
        lower_inclusive: true,
        upper_inclusive: false
      }}
@@ -30,6 +33,9 @@ defmodule AperDesk.Scheduling.TstzRange do
   def dump(_), do: :error
 
   defp from_range(%Postgrex.Range{lower: lower, upper: upper}), do: {lower, upper}
+
+  defp utc(%DateTime{time_zone: "Etc/UTC"} = datetime), do: datetime
+  defp utc(%DateTime{} = datetime), do: DateTime.shift_zone!(datetime, "Etc/UTC")
 
   @doc "Build a range from a start time and a duration in minutes."
   def from_duration(%DateTime{} = from, minutes) when is_integer(minutes),

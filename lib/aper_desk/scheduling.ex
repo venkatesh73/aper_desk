@@ -220,6 +220,54 @@ defmodule AperDesk.Scheduling do
     end
   end
 
+  @doc """
+  Pairs of commitments that overlap for the same person in `period`.
+
+  Computed from one loaded set rather than a query per person, so the calendar
+  reports exactly what it drew.
+
+  Every pair here involves at least one hold, and that is not an accident: the
+  exclusion constraint makes two *blocking* commitments overlapping for one
+  person impossible to write, so the only overlap that can survive is one the
+  database was told to permit. Those are precisely the ones a human has to
+  decide about — confirm the pencilled date, or release it.
+
+  Each pair is returned once, ordered by id, rather than twice from both sides.
+  """
+  def clashes_in(%Scope{} = scope, {_from, _to} = period, opts \\ []) do
+    with {:ok, assignments} <- calendar(scope, period, opts) do
+      pairs =
+        assignments
+        |> Enum.reject(&(not is_nil(&1.released_at)))
+        |> Enum.group_by(& &1.user_id)
+        |> Enum.flat_map(fn {_user_id, list} ->
+          for a <- list,
+              b <- list,
+              a.id < b.id,
+              a.kind == "hold" or b.kind == "hold",
+              TstzRange.overlaps?(a.period, b.period),
+              do: %{id: a.id, user: a.user, first: a, second: b, starts_at: elem(a.period, 0)}
+        end)
+        |> Enum.sort_by(& &1.starts_at, DateTime)
+
+      {:ok, pairs}
+    end
+  end
+
+  @doc "Holds that will lapse within `days`, so a pencilled date is not lost silently."
+  def holds_expiring(%Scope{} = scope, days \\ 14) do
+    now = DateTime.utc_now()
+    until = DateTime.add(now, days * 24 * 60 * 60, :second)
+
+    Assignment
+    |> Scoped.for_studio(scope)
+    |> where([a], a.kind == "hold" and is_nil(a.released_at))
+    |> where([a], not is_nil(a.expires_at) and a.expires_at >= ^now and a.expires_at <= ^until)
+    |> order_by([a], asc: a.expires_at)
+    |> preload([:job, :user])
+    |> Repo.all()
+  end
+
   ## Availability and public booking
 
   def list_availability(%Scope{} = scope) do

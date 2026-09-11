@@ -156,6 +156,56 @@ defmodule AperDesk.Fixtures do
     gallery
   end
 
+  @doc """
+  A booked shoot, optionally with crew.
+
+  `crew` takes the same shape `Scheduling.create_job/3` does — a list of maps
+  with at least a `:user_id` — so a test that wants a clash books the same
+  person twice rather than writing overlapping assignments by hand.
+  """
+  def job_fixture(scope, attrs \\ %{}, crew \\ []) do
+    {from, to} = future_window()
+
+    {:ok, job} =
+      AperDesk.Scheduling.create_job(
+        scope,
+        Map.merge(
+          %{
+            "title" => "Anna and Ben",
+            "shoot_type" => "wedding",
+            "starts_at" => from,
+            "ends_at" => to
+          },
+          attrs
+        ),
+        crew
+      )
+
+    job
+  end
+
+  @doc "A pencilled-in date that lapses in `days` unless it is confirmed."
+  def hold_fixture(scope, user_id, attrs \\ %{}) do
+    {from, to} = future_window()
+
+    {:ok, assignment} =
+      AperDesk.Scheduling.assign(
+        scope,
+        Map.merge(
+          %{
+            "user_id" => user_id,
+            "kind" => "hold",
+            "label" => "Pencilled date",
+            "period" => {from, to},
+            "expires_at" => DateTime.add(DateTime.utc_now(), 3 * 86_400, :second)
+          },
+          attrs
+        )
+      )
+
+    assignment
+  end
+
   @doc "A future window, so fixtures never clash with each other by accident."
   def future_window(offset_hours \\ 24, length_hours \\ 4) do
     from = DateTime.utc_now() |> DateTime.add(offset_hours * 3600, :second)
