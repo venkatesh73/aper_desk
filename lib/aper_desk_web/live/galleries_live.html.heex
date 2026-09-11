@@ -1,0 +1,158 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:galleries} />
+
+    <div class="main">
+      <%= if @live_action == :index do %>
+        <.topbar title="Galleries" subtitle="Finished frames, handed over.">
+          <:actions>
+            <div :if={storage_caption(@usage)} class="store" style="min-width:220px">
+              <span>{storage_caption(@usage)}</span>
+              <div class="bar"><i style={"width:#{storage_fill(@usage)}"}></i></div>
+            </div>
+            <a class="btn primary" href={~p"/app/galleries/new"}>+ New gallery</a>
+          </:actions>
+        </.topbar>
+
+        <div class="filters">
+          <span class="eyebrow">Status</span>
+          <button
+            class="chip"
+            aria-pressed={to_string(is_nil(@status))}
+            phx-click="status"
+            phx-value-status=""
+          >
+            All
+          </button>
+          <button
+            :for={status <- statuses()}
+            class="chip"
+            aria-pressed={to_string(@status == status)}
+            phx-click="status"
+            phx-value-status={status}
+          >
+            {status_label(status)}
+          </button>
+        </div>
+
+        <div :if={@galleries != []} class="gals">
+          <a :for={gallery <- @galleries} class="gcard" href={~p"/app/galleries/#{gallery}"}>
+            <div class={["photo", is_nil(@covers[gallery.cover_media_id]) && "ph"]}>
+              <img
+                :if={@covers[gallery.cover_media_id]}
+                src={@covers[gallery.cover_media_id]}
+                alt=""
+              />
+            </div>
+            <div class="gb">
+              <div class="row">
+                <b>{gallery.title}</b>
+                <span class={["pill", status_tone(gallery.status)]}>
+                  {status_label(gallery.status)}
+                </span>
+              </div>
+              <span>{contents(gallery)}</span>
+              <span class={outstanding_tone(gallery) == "bad" && "bad-text"}>
+                {outstanding(@current_scope, gallery)}
+              </span>
+            </div>
+          </a>
+        </div>
+
+        <.empty
+          :if={@galleries == [] and is_nil(@status)}
+          title="No galleries yet"
+          body="A gallery is how the client sees the finished work — and how they tell you which frames they want."
+        />
+        <.empty
+          :if={@galleries == [] and not is_nil(@status)}
+          title={"Nothing #{String.downcase(status_label(@status))}"}
+          body="Clear the filter to see the rest."
+        />
+      <% else %>
+        <.topbar title="New gallery" subtitle="Name it now, upload into it next.">
+          <:actions>
+            <a class="btn" href={~p"/app/galleries"}>Cancel</a>
+          </:actions>
+        </.topbar>
+
+        <div class="formpanel">
+          <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+            <.section title="The gallery">
+              <.text_field
+                field={@form[:title]}
+                label="What is it?"
+                placeholder="Anna and Ben — wedding"
+                required
+              />
+              <.textarea_field
+                field={@form[:description]}
+                label="A note for the client"
+                rows={3}
+                placeholder="Six hundred frames from the day, in the order they happened."
+              />
+              <.combo_field
+                id="gallery-contact"
+                field={@form[:contact_id]}
+                label="Who is it for?"
+                options={contact_options(@contacts)}
+                prompt="Not linked to a contact yet"
+                search_placeholder="Search contacts"
+                empty_message="No contact by that name"
+              />
+            </.section>
+
+            <.section
+              title="How the client sees it"
+              description="All of this can change later, right up until you deliver."
+            >
+              <.text_field
+                field={@form[:password]}
+                label="Password"
+                type="password"
+                hint="Leave it blank for a link that anyone with the URL can open."
+              />
+
+              <.checkbox_field
+                field={@form[:download_enabled]}
+                label="Let them download the files"
+                checked_default={true}
+              />
+              <.checkbox_field
+                field={@form[:watermark_enabled]}
+                label="Watermark the previews"
+              />
+              <.checkbox_field
+                field={@form[:show_studio_badge]}
+                label="Show your studio name on the gallery"
+                checked_default={true}
+              />
+
+              <.row layout="two">
+                <.text_field
+                  field={@form[:selection_limit]}
+                  label="How many they may pick"
+                  type="number"
+                  min="1"
+                  hint="For an album selection. Blank means no limit."
+                />
+                <.text_field
+                  field={@form[:download_limit]}
+                  label="Download limit"
+                  type="number"
+                  min="1"
+                  hint="Blank means unlimited."
+                />
+              </.row>
+            </.section>
+
+            <.form_actions>
+              <button type="submit" class="btn primary">Create the gallery</button>
+              <a class="btn ghost" href={~p"/app/galleries"}>Cancel</a>
+            </.form_actions>
+          </.form>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>

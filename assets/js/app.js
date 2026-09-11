@@ -46,6 +46,31 @@ const hooks = {
     }
   },
 
+  // Copying the share link. The clipboard API is the only way to put text
+  // there without a paste, and it is refused outside a user gesture — so this
+  // lives on the button rather than being pushed from the server after a
+  // round trip, by which time the gesture has expired.
+  CopyLink: {
+    mounted() {
+      this.el.addEventListener("click", async () => {
+        const input = document.getElementById(this.el.dataset.copyFrom)
+        if (!input) return
+
+        try {
+          await navigator.clipboard.writeText(input.value)
+        } catch (_e) {
+          // Insecure origin, or permission refused: select it so the reader can
+          // copy it themselves rather than being told nothing happened.
+          input.select()
+        }
+
+        const was = this.el.textContent
+        this.el.textContent = "Copied"
+        setTimeout(() => { this.el.textContent = was }, 1600)
+      })
+    }
+  },
+
   DetectTimeZone: {
     mounted() {
       try {

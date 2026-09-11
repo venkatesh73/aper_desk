@@ -45,6 +45,10 @@ defmodule AperDeskWeb.Router do
     post "/forgot-password", AuthController, :create_reset
     get "/reset-password/:token", AuthController, :edit_reset
     put "/reset-password/:token", AuthController, :update_reset
+
+    # The client's way in. The token is the whole authorisation — there is no
+    # scope here, and the gallery id opens nothing.
+    live "/g/:token", ClientGalleryLive, :show
   end
 
   # The signed-in application. RequireAuth guards the HTTP request that renders
@@ -89,7 +93,9 @@ defmodule AperDeskWeb.Router do
       # Routes whose contexts exist but whose screens do not yet. Real routes
       # rather than missing ones, because the sidebar links to them and a 404
       # is a worse answer than saying plainly what is coming.
-      live "/galleries", SoonLive, :galleries
+      live "/galleries", GalleriesLive, :index
+      live "/galleries/new", GalleriesLive, :new
+      live "/galleries/:id", GalleryLive, :show
       live "/quotes", SoonLive, :quotes
       live "/finance", SoonLive, :finance
       live "/team", SoonLive, :team

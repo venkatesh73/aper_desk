@@ -29,6 +29,7 @@ defmodule AperDesk.Galleries do
   alias AperDesk.Repo
   alias AperDesk.Scope
   alias AperDesk.Scoped
+  alias AperDesk.Storage
   alias Ecto.Multi
 
   ## Galleries
@@ -72,6 +73,14 @@ defmodule AperDesk.Galleries do
     end
   end
 
+  @doc "Update a gallery's title, description and delivery settings."
+  def update_gallery(%Scope{} = scope, id, attrs) do
+    with :ok <- Authorization.authorize(scope, :"gallery.write"),
+         {:ok, gallery} <- Scoped.fetch(Gallery, scope, id) do
+      gallery |> Gallery.changeset(attrs) |> Repo.update()
+    end
+  end
+
   @doc """
   Attach an uploaded file.
 
@@ -104,10 +113,23 @@ defmodule AperDesk.Galleries do
     end
   end
 
+  @doc """
+  Detach a file and delete the object behind it.
+
+  The row goes first. If the object delete then fails the studio is left paying
+  for bytes it can no longer see, which a sweep can reclaim later; doing it the
+  other way round would leave a row pointing at a file that is already gone,
+  and the gallery would render broken images with no way back.
+  """
   def remove_media(%Scope{} = scope, media_id) do
     with :ok <- Authorization.authorize(scope, :"gallery.write"),
-         {:ok, media} <- Scoped.fetch(GalleryMedia, scope, media_id) do
-      Repo.delete(media)
+         {:ok, media} <- Scoped.fetch(GalleryMedia, scope, media_id),
+         {:ok, media} <- Repo.delete(media) do
+      for key <- Enum.reject([media.storage_key, media.thumb_key, media.preview_key], &is_nil/1) do
+        Storage.delete(key)
+      end
+
+      {:ok, media}
     end
   end
 
@@ -187,6 +209,19 @@ defmodule AperDesk.Galleries do
         {:ok, share} -> {:ok, share, token}
         {:error, changeset} -> {:error, changeset}
       end
+    end
+  end
+
+  @doc "The live share links for one gallery, newest first."
+  def list_shares(%Scope{} = scope, gallery_id) do
+    with :ok <- Authorization.authorize(scope, :"gallery.read"),
+         {:ok, _gallery} <- Scoped.fetch(Gallery, scope, gallery_id) do
+      {:ok,
+       Repo.all(
+         from s in GalleryShare,
+           where: s.gallery_id == ^gallery_id and is_nil(s.revoked_at),
+           order_by: [desc: s.inserted_at]
+       )}
     end
   end
 

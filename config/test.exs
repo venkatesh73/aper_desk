@@ -52,3 +52,10 @@ config :aper_desk, AperDesk.Vault,
 # `Swoosh.TestAssertions` reads. Without it mail goes to the local previewer and
 # tests cannot see it.
 config :aper_desk, AperDesk.Mailer, adapter: Swoosh.Adapters.Test
+
+# Uploads go to a throwaway directory, so a test that writes a file does not
+# leave one in priv/static.
+config :aper_desk, :storage,
+  adapter: AperDesk.Storage.Local,
+  root: "tmp/test_uploads",
+  public_base_url: "/uploads"
