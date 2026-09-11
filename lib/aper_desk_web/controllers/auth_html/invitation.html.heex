@@ -1,0 +1,77 @@
+<div class="pub">
+  <div class="photo ph">
+    <div class="cap">
+      <%= if @studio do %>
+        {@studio.name}
+      <% else %>
+        AperDesk
+      <% end %>
+    </div>
+  </div>
+
+  <div class="fwrap">
+    <a class="brand" href={~p"/"}>
+      <img src={~p"/images/logo-long.png"} alt="AperDesk" width="140" height="46" />
+    </a>
+
+    <%= if @invitation do %>
+      <h1>Join {@studio.name}</h1>
+      <p class="sub">
+        You have been invited as {AperDeskWeb.TeamLive.role_label(@invitation.role)}. {AperDeskWeb.TeamLive.role_detail(
+          @invitation.role
+        )}
+      </p>
+
+      <div :if={@error} class="hint" style="border-color:var(--bad)">
+        <b style="color:var(--bad)">{@error}</b>
+      </div>
+
+      <%= if @current_scope.user do %>
+        <p class="sub">Signed in as {@current_scope.user.email}.</p>
+
+        <div :if={@current_scope.user.email != @invitation.email} class="hint">
+          <b>This invitation was sent to {@invitation.email}</b>
+          <span style="display:block;margin-top:2px">
+            Taking it now would put <b>{@current_scope.user.email}</b>
+            in the studio instead. <a class="link" href={~p"/sign-out"}>Sign out</a>
+            to take it as the person it was meant for.
+          </span>
+        </div>
+
+        <.form for={%{}} action={~p"/invitations/#{@token}"} as={:accept}>
+          <button type="submit" class="btn primary" style="width:100%">
+            Take the seat
+          </button>
+        </.form>
+      <% else %>
+        <.form for={%{}} action={~p"/invitations/#{@token}"} as={:session} class="form">
+          <div class="field">
+            <label for="invite-email">Your email</label>
+            <input
+              type="email"
+              id="invite-email"
+              name="session[email]"
+              value={@invitation.email}
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="invite-password">Your password</label>
+            <input type="password" id="invite-password" name="session[password]" required />
+          </div>
+          <button type="submit" class="btn primary" style="width:100%">
+            Sign in and join
+          </button>
+        </.form>
+
+        <p class="sub">
+          No account yet? <a class="link" href={~p"/sign-up"}>Create one</a>, then open this link again.
+        </p>
+      <% end %>
+    <% else %>
+      <h1>This invitation is not open</h1>
+      <p class="sub">{@error}</p>
+      <a class="btn" href={~p"/sign-in"}>Go to sign in</a>
+    <% end %>
+  </div>
+</div>

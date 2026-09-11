@@ -46,6 +46,9 @@ defmodule AperDeskWeb.Router do
     get "/reset-password/:token", AuthController, :edit_reset
     put "/reset-password/:token", AuthController, :update_reset
 
+    get "/invitations/:token", AuthController, :show_invitation
+    post "/invitations/:token", AuthController, :accept_invitation
+
     # The client's way in. The token is the whole authorisation — there is no
     # scope here, and the gallery id opens nothing.
     live "/g/:token", ClientGalleryLive, :show
@@ -103,7 +106,7 @@ defmodule AperDeskWeb.Router do
       live "/finance", FinanceLive, :index
       live "/finance/invoices/new", InvoiceLive, :new
       live "/finance/invoices/:id", InvoiceLive, :show
-      live "/team", SoonLive, :team
+      live "/team", TeamLive, :index
       live "/settings", SoonLive, :settings
     end
   end

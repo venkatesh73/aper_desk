@@ -18,6 +18,7 @@ defmodule AperDeskWeb.AuthController do
   alias AperDesk.Accounts
   alias AperDesk.Accounts.{Google, Registration}
   alias AperDesk.Billing
+  alias AperDesk.Scope
 
   @doc "The sign-up form."
   def new_registration(conn, _params) do
@@ -74,6 +75,128 @@ defmodule AperDeskWeb.AuthController do
         )
     end
   end
+
+  ## Invitations
+
+  @doc """
+  Open an invitation link.
+
+  Three audiences arrive here and each needs something different: someone
+  already signed in can take the seat now; someone with an account needs to
+  sign in first; someone with neither needs to register. The page says which
+  of those they are rather than dropping all three on a generic sign-in form
+  and losing the token on the way.
+  """
+  def show_invitation(conn, %{"token" => token}) do
+    case Accounts.preview_invitation(token) do
+      {:ok, invitation, studio} ->
+        render(conn, :invitation,
+          invitation: invitation,
+          studio: studio,
+          token: token,
+          error: nil,
+          page_title: "Join #{studio.name}"
+        )
+
+      {:error, reason} ->
+        render(conn, :invitation,
+          invitation: nil,
+          studio: nil,
+          token: token,
+          error: invitation_error(reason),
+          page_title: "Invitation"
+        )
+    end
+  end
+
+  @doc """
+  Take the seat.
+
+  The signed-in case and the sign-in-then-accept case land on the same
+  function, because accepting is the same operation either way — only how the
+  user was identified differs.
+  """
+  def accept_invitation(conn, %{"token" => token} = params) do
+    case identify(conn, params) do
+      {:ok, user} ->
+        case Accounts.accept_invitation(token, user) do
+          {:ok, membership} ->
+            conn
+            |> put_flash(:info, "You are in.")
+            |> sign_in(user, membership.studio_id)
+
+          {:error, reason} ->
+            reshow(conn, token, invitation_error(reason))
+        end
+
+      {:error, message} ->
+        reshow(conn, token, message)
+    end
+  end
+
+  # Already signed in, or signing in as part of accepting. Registering is sent
+  # to the normal sign-up flow rather than being reimplemented here — that path
+  # creates a studio, and someone joining one should not also get their own.
+  defp identify(conn, params) do
+    case conn.assigns[:current_scope] do
+      %Scope{user: %Accounts.User{} = user} ->
+        {:ok, user}
+
+      _ ->
+        case params do
+          %{"session" => %{"email" => email, "password" => password}} ->
+            case Accounts.authenticate(email, password) do
+              {:ok, user} -> {:ok, user}
+              {:error, :invalid_credentials} -> {:error, "That email and password do not match."}
+            end
+
+          _ ->
+            {:error, "Sign in first, and the seat is yours."}
+        end
+    end
+  end
+
+  defp reshow(conn, token, message) do
+    case Accounts.preview_invitation(token) do
+      {:ok, invitation, studio} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> render(:invitation,
+          invitation: invitation,
+          studio: studio,
+          token: token,
+          error: message,
+          page_title: "Join #{studio.name}"
+        )
+
+      {:error, reason} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> render(:invitation,
+          invitation: nil,
+          studio: nil,
+          token: token,
+          error: invitation_error(reason),
+          page_title: "Invitation"
+        )
+    end
+  end
+
+  # Spelled out rather than inspected, because each of these means something
+  # different to the person reading it and only one of them is worth retrying.
+  defp invitation_error(:already_accepted),
+    do: "This invitation has already been used — you are in the studio already."
+
+  defp invitation_error(:expired_token),
+    do: "This invitation has expired. Ask them to send another."
+
+  defp invitation_error(:invalid_token), do: "This link does not open anything."
+  defp invitation_error(:not_found), do: "This link does not open anything."
+
+  defp invitation_error(%Ecto.Changeset{}),
+    do: "You are already a member of this studio."
+
+  defp invitation_error(_other), do: "Something went wrong taking the seat."
 
   ## Google sign-in
 

@@ -265,3 +265,13 @@ input.invalid,select.invalid,textarea.invalid{border-color:var(--bad)}
   gap: 8px;
 }
 .form .sect > .sect-head.with-action .spacer { flex: 1; }
+
+/* A long email in a list row must not walk over the action beside it. The row
+   already gives the label flex:1 and min-width:0; this is what actually makes
+   the overflow visible as an ellipsis rather than as overlapping text. */
+.list .it > span b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

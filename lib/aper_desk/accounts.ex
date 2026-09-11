@@ -564,6 +564,33 @@ defmodule AperDesk.Accounts do
     end
   end
 
+  @doc """
+  Look at an invitation without spending it.
+
+  The link is opened before it is accepted — the invitee has to see whose
+  studio it is and what seat they are being offered — and reading it must not
+  consume it. Separate from `accept_invitation/2` for the same reason a
+  gallery's `resolve_shared_gallery/1` is separate from opening it.
+  """
+  def preview_invitation(token) when is_binary(token) do
+    hash = UserInvitation.hash(token)
+
+    case Repo.get_by(UserInvitation, token_hash: hash) do
+      nil ->
+        {:error, :invalid_token}
+
+      %UserInvitation{accepted_at: %DateTime{}} ->
+        {:error, :already_accepted}
+
+      invitation ->
+        if UserInvitation.usable?(invitation, DateTime.utc_now()) do
+          {:ok, invitation, Repo.get(Studio, invitation.studio_id)}
+        else
+          {:error, :expired_token}
+        end
+    end
+  end
+
   def revoke_invitation(%Scope{} = scope, invitation_id) do
     with :ok <- Authorization.authorize(scope, :"invitation.write"),
          invitation when not is_nil(invitation) <-

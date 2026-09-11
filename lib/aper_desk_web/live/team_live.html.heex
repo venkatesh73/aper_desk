@@ -1,0 +1,232 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:team} />
+
+    <div class="main">
+      <.topbar
+        title="Team"
+        subtitle={"#{staff_count(@members)} on staff · #{freelance_count(@members)} freelance"}
+      >
+        <:actions>
+          <span :if={@invitations != []} class="pill warn">
+            {length(@invitations)} invited
+          </span>
+        </:actions>
+      </.topbar>
+
+      <div :if={@invite_token} class="panel" style="margin-bottom:12px">
+        <div class="ph-head">
+          <h3>The link for {@invited_email}</h3>
+        </div>
+        <div class="sharebox">
+          <input value={invite_url(@invite_token)} readonly id="invite-url" />
+          <button
+            class="btn sm"
+            type="button"
+            id="copy-invite"
+            phx-hook="CopyLink"
+            data-copy-from="invite-url"
+          >
+            Copy
+          </button>
+        </div>
+        <span class="help" style="font-size:12px;color:var(--faint)">
+          Send it to them yourself. Only a hash is stored, so it cannot be shown again.
+        </span>
+      </div>
+
+      <div class="split">
+        <div>
+          <div :if={@members != []} class="team" style="grid-template-columns:repeat(2,1fr)">
+            <div :for={member <- @members} class="member">
+              <span
+                class="av"
+                style="width:52px;height:52px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:15px"
+              >
+                {initials(member)}
+              </span>
+
+              <div style="min-width:0;flex:1">
+                <%= if @editing == member.id do %>
+                  <.form
+                    for={@member_form}
+                    phx-change="validate-member"
+                    phx-submit="save-member"
+                    class="form"
+                    style="gap:10px"
+                  >
+                    <b>{member_name(member)}</b>
+
+                    <%= if changeable?(member, @owners) do %>
+                      <.select_field
+                        field={@member_form[:role]}
+                        label="Role"
+                        options={role_options()}
+                        hint={role_detail(@member_form[:role].value || member.role)}
+                      />
+                    <% else %>
+                      <.field
+                        label="Role"
+                        hint="A studio has to keep one owner, so this one cannot change. Make somebody else an owner first."
+                      >
+                        <input type="hidden" name="membership[role]" value={member.role} />
+                        <input type="text" value={role_label(member.role)} disabled />
+                      </.field>
+                    <% end %>
+                    <.row layout="two">
+                      <.select_field
+                        field={@member_form[:employment_type]}
+                        label="Engagement"
+                        options={employment_options()}
+                      />
+                      <.field label={"Day rate (#{@current_scope.currency})"}>
+                        <input
+                          type="text"
+                          inputmode="decimal"
+                          name="membership[day_rate_major]"
+                          value={@day_rate_major}
+                          placeholder="Leave blank for salaried"
+                        />
+                      </.field>
+                    </.row>
+                    <.text_field
+                      field={@member_form[:contract_ends_on]}
+                      label="Contract ends"
+                      type="date"
+                    />
+
+                    <.form_actions>
+                      <button type="submit" class="btn primary btn-sm">Save</button>
+                      <button type="button" class="btn ghost" phx-click="cancel-edit">
+                        Cancel
+                      </button>
+                      <span class="spacer"></span>
+                      <button
+                        :if={changeable?(member, @owners)}
+                        type="button"
+                        class="btn ghost"
+                        phx-click="remove"
+                        phx-value-id={member.id}
+                        data-confirm={"Remove #{member_name(member)} from the studio?"}
+                      >
+                        Remove
+                      </button>
+                    </.form_actions>
+                  </.form>
+                <% else %>
+                  <b>{member_name(member)}</b>
+                  <span class="r">{member_line(member)}</span>
+                  <span class="r" style="display:block">{member_email(member)}</span>
+
+                  <div class="tags">
+                    <span class={["pill", status_tone(member.status)]}>
+                      {String.capitalize(member.status)}
+                    </span>
+                    <span
+                      :if={contract_note(@current_scope, member)}
+                      class={[
+                        "pill",
+                        elem(contract_note(@current_scope, member), 0)
+                      ]}
+                    >
+                      {elem(contract_note(@current_scope, member), 1)}
+                    </span>
+                    <span class="pill">{last_seen(@current_scope, member)}</span>
+                  </div>
+
+                  <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
+                    <button class="btn sm" phx-click="edit" phx-value-id={member.id}>
+                      Change their seat
+                    </button>
+                    <span
+                      :if={not changeable?(member, @owners)}
+                      style="font-size:11.5px;color:var(--faint)"
+                    >
+                      The only owner — role is fixed
+                    </span>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          </div>
+
+          <.empty
+            :if={@members == []}
+            title="Nobody here yet"
+            body="Invite a second shooter, an editor or whoever does your books — each role opens a different part of the studio."
+          />
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="panel">
+            <div class="ph-head">
+              <h3>Invite someone</h3>
+            </div>
+            <.form for={@invite_form} phx-submit="invite" class="form" style="gap:12px">
+              <.field label="Their email">
+                <input
+                  type="email"
+                  name="invitation[email]"
+                  value={@invite_form.params["email"]}
+                  placeholder="jonas@example.com"
+                  required
+                />
+                <.errors field={@invite_form[:email]} />
+              </.field>
+
+              <.field label="What they can see">
+                <select name="invitation[role]">
+                  <option
+                    :for={{label, value} <- role_options()}
+                    value={value}
+                    selected={value == @invite_form.params["role"]}
+                  >
+                    {label}
+                  </option>
+                </select>
+                <.errors field={@invite_form[:role]} />
+              </.field>
+
+              <.form_actions>
+                <button type="submit" class="btn primary">Create the link</button>
+              </.form_actions>
+            </.form>
+
+            <div class="hint" style="margin-top:10px">
+              <b>Roles are the whole permission system</b>
+              <span style="display:block;margin-top:2px">
+                A photographer never sees money. Finance never sees client galleries. HR never
+                sees client data.
+              </span>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="ph-head">
+              <h3>Waiting to join</h3>
+            </div>
+            <div :if={@invitations != []} class="list">
+              <div :for={invitation <- @invitations} class="it">
+                <span class="dot warn"></span>
+                <span style="flex:1;min-width:0">
+                  <b>{invitation.email}</b>
+                  <span class="sub">
+                    {role_label(invitation.role)} · {invitation_expiry(@current_scope, invitation)}
+                  </span>
+                </span>
+                <button
+                  class="btn sm ghost"
+                  phx-click="revoke-invite"
+                  phx-value-id={invitation.id}
+                >
+                  Revoke
+                </button>
+              </div>
+            </div>
+            <.empty :if={@invitations == []} title="Nobody outstanding" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layouts.app>
