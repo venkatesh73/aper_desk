@@ -241,8 +241,19 @@ defmodule AperDesk.Galleries do
 
   Checks the share is live and the gallery has not expired. Returns
   `{:ok, gallery, share}` and records the visit.
+
+  Use `resolve_shared_gallery/1` where the same open may be evaluated more than
+  once — a LiveView mounts twice, and counting that as two visits tells the
+  studio the client came back when they did not.
   """
   def open_shared_gallery(token) when is_binary(token) do
+    with {:ok, _gallery, share} <- resolve_shared_gallery(token) do
+      record_visit(share)
+    end
+  end
+
+  @doc "Resolve a share token without recording a visit. See `open_shared_gallery/1`."
+  def resolve_shared_gallery(token) when is_binary(token) do
     hash = GalleryShare.hash_token(token)
     now = DateTime.utc_now()
 
@@ -257,7 +268,7 @@ defmodule AperDesk.Galleries do
           not GalleryShare.usable?(share, now) -> {:error, :revoked}
           Gallery.expired?(share.gallery, now) -> {:error, :expired}
           share.gallery.status == "archived" -> {:error, :archived}
-          true -> record_visit(share)
+          true -> {:ok, share.gallery, share}
         end
     end
   end

@@ -68,9 +68,16 @@ defmodule AperDesk.Sales do
     end
   end
 
+  @doc """
+  Re-price a quote.
+
+  Loaded through `fetch_quote/2` rather than `Scoped.fetch/3` so the line items
+  come with it: `Quote.changeset/2` casts them, and casting an unloaded
+  association raises rather than quietly doing nothing.
+  """
   def update_quote(%Scope{} = scope, id, attrs) do
     with :ok <- Authorization.authorize(scope, :"quote.write"),
-         {:ok, quote} <- Scoped.fetch(Quote, scope, id),
+         {:ok, quote} <- fetch_quote(scope, id),
          :ok <- ensure_editable(quote) do
       quote |> Quote.changeset(attrs) |> Repo.update()
     end

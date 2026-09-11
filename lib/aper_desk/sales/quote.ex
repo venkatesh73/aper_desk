@@ -68,6 +68,7 @@ defmodule AperDesk.Sales.Quote do
       :currency,
       :fx_rate_to_base,
       :discount_cents,
+      :tax_cents,
       :valid_until,
       :terms,
       :client_note,

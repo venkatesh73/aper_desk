@@ -106,6 +106,84 @@ defmodule AperDesk.Money do
 
   def to_string(nil, _opts), do: "—"
 
+  @doc """
+  Parse what a person typed into integer minor units.
+
+  People type `4500`, `4,500`, `4 500,50`, `$4500.50` or nothing at all, and
+  every screen that takes money has to cope with all of it. Done through
+  `Decimal` rather than `Float`, because `4500.10 * 100` is `450009.99999...`
+  in binary floating point and rounding that is one cent of silent error per
+  invoice line.
+
+  Anything unparseable is `0` rather than an exception: the form's own
+  validation is what should tell the reader their price is wrong, not a crash
+  halfway through a changeset.
+  """
+  def from_major(nil, _currency), do: 0
+  def from_major("", _currency), do: 0
+
+  def from_major(value, currency) when is_integer(value),
+    do: value * pow10(exponent(currency))
+
+  def from_major(%Decimal{} = value, currency), do: scale(value, currency)
+
+  def from_major(value, currency) when is_float(value),
+    do: value |> Decimal.from_float() |> scale(currency)
+
+  def from_major(value, currency) when is_binary(value) do
+    cleaned =
+      value
+      |> String.replace(~r/[^\d.,+-]/, "")
+      |> normalise_separators()
+
+    case Decimal.parse(cleaned) do
+      {decimal, _rest} -> scale(decimal, currency)
+      :error -> 0
+    end
+  end
+
+  @doc """
+  Integer minor units back to the major-unit string a form field shows.
+
+  The inverse of `from_major/2`, so a price typed as `4500.50`, saved, and
+  re-opened for editing comes back as `4500.50` rather than `4500.5` or
+  `4500.499999`.
+  """
+  def to_major(nil, _currency), do: nil
+
+  def to_major(cents, currency) when is_integer(cents) do
+    exponent = exponent(currency)
+
+    cents
+    |> Decimal.new()
+    |> Decimal.div(Decimal.new(pow10(exponent)))
+    |> Decimal.round(exponent)
+    |> Decimal.to_string(:normal)
+  end
+
+  defp scale(%Decimal{} = value, currency) do
+    value
+    |> Decimal.mult(Decimal.new(pow10(exponent(currency))))
+    |> Decimal.round(0)
+    |> Decimal.to_integer()
+  end
+
+  # "1.234,56" is a thousands separator and a decimal comma; "1,234.56" is the
+  # other way round. The last separator in the string is the decimal one, and
+  # every other separator is noise — which is true of both conventions.
+  defp normalise_separators(value) do
+    case {String.last(String.replace(value, ~r/[^.,]/, "")), value} do
+      {nil, _} ->
+        value
+
+      {",", _} ->
+        value |> String.replace(".", "") |> String.replace(",", ".")
+
+      {".", _} ->
+        String.replace(value, ",", "")
+    end
+  end
+
   @doc "Convenience for the many schemas that store `*_cents` + `*_currency`."
   def from_fields(struct, prefix) do
     amount = Map.get(struct, :"#{prefix}_cents")

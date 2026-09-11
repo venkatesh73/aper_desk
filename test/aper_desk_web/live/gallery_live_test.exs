@@ -135,6 +135,15 @@ defmodule AperDeskWeb.GalleryLiveTest do
       assert html =~ "Your favourites"
     end
 
+    test "one visit is counted once, not twice", %{token: token, scope: scope, gallery: gallery} do
+      {:ok, _view, _html} = live(build_conn(), ~p"/g/#{token}")
+
+      # A LiveView mounts twice — the dead render, then the socket. Counting
+      # both would tell the studio the client came back when they arrived.
+      {:ok, [share]} = Galleries.list_shares(scope, gallery.id)
+      assert share.view_count == 1
+    end
+
     test "a favourite is attributed to the link it came through", %{
       token: token,
       media: media,

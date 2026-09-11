@@ -20,7 +20,15 @@ defmodule AperDeskWeb.ClientGalleryLive do
 
   @impl true
   def mount(%{"token" => token}, _session, socket) do
-    case Galleries.open_shared_gallery(token) do
+    # Resolved either way, but counted only once. A LiveView mounts twice — the
+    # dead render and then the socket — and recording both would tell the
+    # studio the client came back when they only arrived.
+    opener =
+      if connected?(socket),
+        do: &Galleries.open_shared_gallery/1,
+        else: &Galleries.resolve_shared_gallery/1
+
+    case opener.(token) do
       {:ok, gallery, share} ->
         {:ok,
          socket

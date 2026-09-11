@@ -49,6 +49,7 @@ defmodule AperDeskWeb.Router do
     # The client's way in. The token is the whole authorisation — there is no
     # scope here, and the gallery id opens nothing.
     live "/g/:token", ClientGalleryLive, :show
+    live "/q/:token", ClientQuoteLive, :show
   end
 
   # The signed-in application. RequireAuth guards the HTTP request that renders
@@ -96,7 +97,9 @@ defmodule AperDeskWeb.Router do
       live "/galleries", GalleriesLive, :index
       live "/galleries/new", GalleriesLive, :new
       live "/galleries/:id", GalleryLive, :show
-      live "/quotes", SoonLive, :quotes
+      live "/quotes", QuotesLive, :index
+      live "/quotes/new", QuotesLive, :new
+      live "/quotes/:id", QuoteLive, :show
       live "/finance", SoonLive, :finance
       live "/team", SoonLive, :team
       live "/settings", SoonLive, :settings

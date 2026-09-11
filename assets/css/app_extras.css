@@ -256,3 +256,12 @@ input.invalid,select.invalid,textarea.invalid{border-color:var(--bad)}
   cursor: pointer;
 }
 .gtool input[type="file"]::file-selector-button:hover { border-color: var(--faint); }
+
+/* A section that carries an action — "add a line" — puts it on the heading
+   row rather than letting it stretch across the section like a field. */
+.form .sect > .sect-head.with-action {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.form .sect > .sect-head.with-action .spacer { flex: 1; }

@@ -1,0 +1,143 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:quotes} />
+
+    <div class="main">
+      <%= if @live_action == :index do %>
+        <.topbar title="Quotes" subtitle="What you have priced, and who has read it.">
+          <:actions>
+            <span :if={@open_value.amount > 0} class="pill">
+              {Money.to_string(@open_value)} in play
+            </span>
+            <a class="btn primary" href={~p"/app/quotes/new"}>+ New quote</a>
+          </:actions>
+        </.topbar>
+
+        <div class="filters">
+          <span class="eyebrow">Status</span>
+          <button
+            class="chip"
+            aria-pressed={to_string(is_nil(@status))}
+            phx-click="status"
+            phx-value-status=""
+          >
+            All
+          </button>
+          <button
+            :for={status <- statuses()}
+            class="chip"
+            aria-pressed={to_string(@status == status)}
+            phx-click="status"
+            phx-value-status={status}
+          >
+            {status_label(status)}
+          </button>
+        </div>
+
+        <div :if={@quotes != []} class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Quote</th>
+                <th>Client</th>
+                <th>Waiting on</th>
+                <th>Status</th>
+                <th style="text-align:right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                :for={quote <- @quotes}
+                onclick={"window.location='/app/quotes/#{quote.id}'"}
+                style="cursor:pointer"
+              >
+                <td class="mono">{quote.reference}</td>
+                <td>
+                  {client_name(quote)}
+                  <span style="display:block;color:var(--faint);font-size:12px">
+                    {quote.title}
+                  </span>
+                </td>
+                <td class={waiting_tone(quote) == "bad" && "bad-text"}>
+                  {waiting_on(@current_scope, quote)}
+                </td>
+                <td>
+                  <span class={["pill", status_tone(quote.status)]}>
+                    {status_label(quote.status)}
+                  </span>
+                </td>
+                <td class="r">{total(quote)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <.empty
+          :if={@quotes == [] and is_nil(@status)}
+          title="No quotes yet"
+          body="A quote is a price the client can accept in one tap — and the moment you learn whether they read it."
+        />
+        <.empty
+          :if={@quotes == [] and not is_nil(@status)}
+          title={"Nothing #{String.downcase(status_label(@status))}"}
+          body="Clear the filter to see the rest."
+        />
+      <% else %>
+        <.topbar
+          title="New quote"
+          subtitle="Name it and pick the client; price it on the next screen."
+        >
+          <:actions>
+            <a class="btn" href={~p"/app/quotes"}>Cancel</a>
+          </:actions>
+        </.topbar>
+
+        <div class="formpanel">
+          <.form for={@form} phx-change="validate" phx-submit="save" class="form">
+            <.section title="The quote">
+              <.text_field
+                field={@form[:title]}
+                label="What is it for?"
+                placeholder="Anna and Ben — wedding, 14 June"
+                required
+              />
+              <.combo_field
+                id="quote-contact"
+                field={@form[:contact_id]}
+                label="Who is it for?"
+                options={contact_options(@contacts)}
+                prompt="Not linked to a contact yet"
+                search_placeholder="Search contacts"
+                empty_message="No contact by that name"
+              />
+            </.section>
+
+            <.section
+              title="Money and timing"
+              description="The currency is fixed once the quote is sent, so the client always sees the number they were quoted."
+            >
+              <.row layout="two">
+                <.select_field
+                  field={@form[:currency]}
+                  label="Currency"
+                  options={currency_options()}
+                />
+                <.text_field
+                  field={@form[:valid_until]}
+                  label="Valid until"
+                  type="date"
+                  hint="After this it expires on its own."
+                />
+              </.row>
+            </.section>
+
+            <.form_actions>
+              <button type="submit" class="btn primary">Start the quote</button>
+              <a class="btn ghost" href={~p"/app/quotes"}>Cancel</a>
+            </.form_actions>
+          </.form>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>

@@ -158,17 +158,8 @@ defmodule AperDeskWeb.PackagesLive do
 
       major ->
         params
-        |> Map.put("price_cents", major_to_cents(major, currency))
+        |> Map.put("price_cents", Money.from_major(major, currency))
         |> Map.put("price_currency", currency)
-    end
-  end
-
-  defp major_to_cents(major, currency) do
-    exponent = Money.exponent(currency)
-
-    case Float.parse(to_string(major)) do
-      {value, _rest} -> round(value * :math.pow(10, exponent))
-      :error -> 0
     end
   end
 
@@ -185,10 +176,8 @@ defmodule AperDeskWeb.PackagesLive do
   @doc "The price in major units, for the form field."
   def price_major(%Package{price_cents: nil}), do: nil
 
-  def price_major(%Package{price_cents: cents, price_currency: currency}) do
-    exponent = Money.exponent(currency || "USD")
-    cents / :math.pow(10, exponent)
-  end
+  def price_major(%Package{price_cents: cents, price_currency: currency}),
+    do: Money.to_major(cents, currency || "USD")
 
   def duration(%Package{duration_minutes: nil}), do: "—"
   def duration(%Package{duration_minutes: minutes}) when minutes < 60, do: "#{minutes} min"

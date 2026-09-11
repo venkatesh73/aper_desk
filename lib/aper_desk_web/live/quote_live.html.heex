@@ -1,0 +1,290 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:quotes} />
+
+    <div class="main">
+      <.topbar
+        title={"#{@quote.reference} · #{@quote.title}"}
+        subtitle={valid_line(@current_scope, @quote)}
+      >
+        <:actions>
+          <a class="btn ghost sm" href={~p"/app/quotes"}>← Quotes</a>
+          <span class={["pill", status_tone(@quote.status)]}>{status_label(@quote.status)}</span>
+          <button :if={@quote.status in ~w(sent viewed)} class="btn" phx-click="decline">
+            Client declined
+          </button>
+          <button :if={@quote.status in ~w(sent viewed)} class="btn" phx-click="accept">
+            Client accepted
+          </button>
+          <button :if={@quote.status == "draft"} class="btn primary" phx-click="send">
+            Send it
+          </button>
+        </:actions>
+      </.topbar>
+
+      <div :if={@share_token} class="panel" style="margin-bottom:12px">
+        <div class="ph-head">
+          <h3>The client's link</h3>
+        </div>
+        <div class="sharebox">
+          <input value={share_url(@share_token)} readonly id="quote-share-url" />
+          <button
+            class="btn sm"
+            type="button"
+            id="copy-quote-link"
+            phx-hook="CopyLink"
+            data-copy-from="quote-share-url"
+          >
+            Copy
+          </button>
+        </div>
+        <span class="help" style="font-size:12px;color:var(--faint)">
+          Only a hash of this link is stored, so it cannot be shown again.
+        </span>
+      </div>
+
+      <.form for={@form} phx-change="validate" phx-submit="save">
+        <div class="wiz">
+          <div class="steps">
+            <span class="eyebrow">This quote</span>
+            <a class="on" href="#q-client">Client</a>
+            <a href="#q-lines">Line items</a>
+            <a href="#q-terms">Terms</a>
+
+            <div class="hr" style="margin:10px 0"></div>
+            <span class="eyebrow">Also open</span>
+            <a :for={other <- @open_quotes} href={~p"/app/quotes/#{other}"}>
+              {other.reference}
+            </a>
+            <span
+              :if={@open_quotes == []}
+              style="font-size:12.5px;color:var(--faint);padding:6px 0;display:block"
+            >
+              Nothing else out.
+            </span>
+          </div>
+
+          <div class="form">
+            <div class="sect" id="q-client">
+              <div class="sect-head">
+                <h3>Client</h3>
+              </div>
+              <.text_field field={@form[:title]} label="What it is for" required />
+              <.combo_field
+                id="quote-contact"
+                field={@form[:contact_id]}
+                label="Client"
+                options={contact_options(@contacts)}
+                prompt="Not linked to a contact yet"
+                search_placeholder="Search contacts"
+              />
+              <.row layout="two">
+                <.select_field
+                  field={@form[:currency]}
+                  label="Currency"
+                  options={currency_options()}
+                />
+                <.text_field field={@form[:valid_until]} label="Valid until" type="date" />
+              </.row>
+            </div>
+
+            <div class="sect" id="q-lines">
+              <div class="sect-head with-action">
+                <h3>Line items</h3>
+                <span class="spacer"></span>
+                <button
+                  :if={editable?(@quote)}
+                  type="button"
+                  class="btn sm"
+                  phx-click="add-line"
+                >
+                  + Add a line
+                </button>
+              </div>
+
+              <div class="lines">
+                <div class="ln">
+                  <span>Description</span>
+                  <span>Qty</span>
+                  <span class="r">Unit price</span>
+                  <span></span>
+                </div>
+                <.inputs_for :let={line} field={@form[:line_items]}>
+                  <div class="ln">
+                    <input
+                      type="text"
+                      name={line[:description].name}
+                      value={line[:description].value}
+                      placeholder="Ten hours of coverage"
+                      disabled={not editable?(@quote)}
+                    />
+                    <input
+                      type="text"
+                      inputmode="decimal"
+                      name={line[:quantity].name}
+                      value={line[:quantity].value}
+                      disabled={not editable?(@quote)}
+                    />
+                    <input
+                      type="text"
+                      inputmode="decimal"
+                      class="r"
+                      name={"quote[line_items][#{line.index}][unit_price_major]"}
+                      value={
+                        line.params["unit_price_major"] ||
+                          Money.to_major(line[:unit_price_cents].value, @quote.currency)
+                      }
+                      placeholder="0.00"
+                      disabled={not editable?(@quote)}
+                    />
+                    <input type="hidden" name={line[:position].name} value={line.index} />
+                    <input
+                      :if={line[:id].value}
+                      type="hidden"
+                      name={line[:id].name}
+                      value={line[:id].value}
+                    />
+                    <button
+                      :if={editable?(@quote)}
+                      type="button"
+                      class="btn icon ghost sm"
+                      phx-click="remove-line"
+                      phx-value-index={to_string(line.index)}
+                      title="Remove this line"
+                    >
+                      ×
+                    </button>
+                    <span :if={not editable?(@quote)}></span>
+                  </div>
+                </.inputs_for>
+
+                <div
+                  :if={@quote.line_items == [] and @form[:line_items].value in [nil, []]}
+                  class="ln"
+                >
+                  <span style="color:var(--faint);grid-column:1/-1">
+                    Nothing priced yet. Add a line to start.
+                  </span>
+                </div>
+              </div>
+
+              <.errors field={@form[:line_items]} />
+            </div>
+
+            <div class="sect" id="q-terms">
+              <div class="sect-head">
+                <h3>Terms</h3>
+              </div>
+
+              <.row layout="two">
+                <.field label="Discount" hint="Taken off the subtotal.">
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    name="quote[discount_major]"
+                    value={
+                      @form.params["discount_major"] ||
+                        Money.to_major(@quote.discount_cents, @quote.currency)
+                    }
+                    placeholder="0.00"
+                    disabled={not editable?(@quote)}
+                  />
+                </.field>
+                <.field label="Tax" hint="Added after the discount.">
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    name="quote[tax_major]"
+                    value={
+                      @form.params["tax_major"] ||
+                        Money.to_major(@quote.tax_cents, @quote.currency)
+                    }
+                    placeholder="0.00"
+                    disabled={not editable?(@quote)}
+                  />
+                </.field>
+              </.row>
+
+              <.field
+                label="Deposit to book the date"
+                hint="What you need before the date is held."
+              >
+                <input
+                  type="text"
+                  inputmode="decimal"
+                  name="quote[deposit_major]"
+                  value={
+                    @form.params["deposit_major"] ||
+                      Money.to_major(@quote.deposit_cents, @quote.currency)
+                  }
+                  placeholder="0.00"
+                  disabled={not editable?(@quote)}
+                />
+              </.field>
+
+              <.textarea_field
+                field={@form[:terms]}
+                label="Terms"
+                rows={4}
+                placeholder="The deposit holds the date. The balance is due fourteen days before."
+              />
+              <.textarea_field
+                field={@form[:client_note]}
+                label="A note to the client"
+                rows={3}
+              />
+            </div>
+
+            <.form_actions :if={editable?(@quote)}>
+              <button type="submit" class="btn primary">Save the quote</button>
+              <a class="btn ghost" href={~p"/app/quotes"}>Back to quotes</a>
+            </.form_actions>
+
+            <div :if={not editable?(@quote)} class="hint">
+              <b>This quote is {String.downcase(status_label(@quote.status))}</b>
+              <span style="display:block;margin-top:2px">
+                It is a record of what the client was offered, so it cannot be re-priced.
+                Start a new quote instead.
+              </span>
+            </div>
+          </div>
+
+          <div class="rside">
+            <span class="eyebrow">Totals</span>
+            <div class="kv">
+              <span>Subtotal</span>
+              <span>{Money.to_string(@preview.subtotal, cents: true)}</span>
+              <span>Discount</span>
+              <span>−{Money.to_string(@preview.discount, cents: true)}</span>
+              <span>Tax</span>
+              <span>{Money.to_string(@preview.tax, cents: true)}</span>
+            </div>
+
+            <div class="hr"></div>
+
+            <div class="kv" style="font-size:15px;font-weight:700">
+              <span style="color:var(--faint);font-weight:400">Client pays</span>
+              <span>{Money.to_string(@preview.total, cents: true)}</span>
+            </div>
+
+            <div class="kv">
+              <span>Deposit</span>
+              <span>{Money.to_string(@preview.deposit, cents: true)}</span>
+            </div>
+            <p :if={deposit_share(@preview)}>{deposit_share(@preview)}</p>
+
+            <div class="hr"></div>
+
+            <span class="eyebrow">Where it is</span>
+            <p>
+              {AperDeskWeb.QuotesLive.waiting_on(@current_scope, @quote)}
+            </p>
+            <p :if={@quote.status == "draft"}>
+              Sending mints a one-time link the client can open without an account.
+            </p>
+          </div>
+        </div>
+      </.form>
+    </div>
+  </div>
+</Layouts.app>

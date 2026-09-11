@@ -1,0 +1,115 @@
+<%= if @quote do %>
+  <Layouts.flash_group flash={@flash} />
+
+  <div class="cg">
+    <div class="cg-nav">
+      <b>{@quote.studio.name}</b>
+      <span class="who">Quote {@quote.reference}</span>
+    </div>
+
+    <div style="max-width:720px;margin:0 auto;padding:32px 24px 64px;display:flex;flex-direction:column;gap:16px">
+      <div>
+        <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:34px;letter-spacing:-.015em">
+          {@quote.title}
+        </h1>
+        <p style="color:var(--muted);margin-top:6px">
+          Quote {@quote.reference} from {@quote.studio.name}
+        </p>
+      </div>
+
+      <div :if={@quote.client_note} class="quote-hero">
+        <p>{@quote.client_note}</p>
+        <div class="who"><span>{@quote.studio.name}</span></div>
+      </div>
+
+      <div class="tablewrap">
+        <table style="min-width:0">
+          <thead>
+            <tr>
+              <th>What is included</th>
+              <th style="text-align:right">Qty</th>
+              <th style="text-align:right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={item <- Enum.sort_by(@quote.line_items, & &1.position)}>
+              <td>
+                {item.description}
+                <span :if={item.detail} style="display:block;color:var(--faint);font-size:12px">
+                  {item.detail}
+                </span>
+              </td>
+              <td class="r">{quantity(item)}</td>
+              <td class="r">{line_total(item, @quote.currency)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <div class="kv">
+          <span>Subtotal</span>
+          <span>{money(@quote.subtotal_cents, @quote.currency)}</span>
+          <span :if={@quote.discount_cents > 0}>Discount</span>
+          <span :if={@quote.discount_cents > 0}>
+            −{money(@quote.discount_cents, @quote.currency)}
+          </span>
+          <span :if={@quote.tax_cents > 0}>Tax</span>
+          <span :if={@quote.tax_cents > 0}>{money(@quote.tax_cents, @quote.currency)}</span>
+        </div>
+        <div class="hr" style="margin:10px 0"></div>
+        <div class="kv" style="font-size:17px;font-weight:700">
+          <span style="color:var(--faint);font-weight:400">Total</span>
+          <span>{money(@quote.total_cents, @quote.currency)}</span>
+        </div>
+        <div :if={@quote.deposit_cents > 0} class="kv" style="margin-top:6px">
+          <span>To book the date</span>
+          <span>{money(@quote.deposit_cents, @quote.currency)}</span>
+        </div>
+      </div>
+
+      <div :if={@quote.terms} class="panel">
+        <div class="ph-head">
+          <h3>Terms</h3>
+        </div>
+        <p style="color:var(--muted);white-space:pre-wrap;margin:0">{@quote.terms}</p>
+      </div>
+
+      <div :if={@quote.status == "accepted"} class="hint">
+        <b style="color:var(--ok)">You accepted this quote</b>
+        <span style="display:block;margin-top:2px">
+          {@quote.studio.name} will be in touch about the deposit and the date.
+        </span>
+      </div>
+
+      <div :if={@quote.status == "declined"} class="hint">
+        <b>This quote was declined</b>
+      </div>
+
+      <div :if={not decided?(@quote)} class="hint">
+        <b>Happy with this?</b>
+        <span style="display:block;margin-top:2px">
+          Reply to {@quote.studio.name} to accept it, and they will hold the date. {held_until(
+            @quote
+          )}
+        </span>
+      </div>
+    </div>
+
+    <div class="cg-foot">
+      <span>{@quote.studio.name}</span>
+      <span>Quote {@quote.reference}</span>
+    </div>
+  </div>
+<% else %>
+  <div style="min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center">
+    <div style="max-width:420px">
+      <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:32px">
+        This link does not open anything
+      </h1>
+      <p style="color:var(--muted);margin-top:10px">
+        The quote may have been replaced or withdrawn. Ask your photographer for a new link.
+      </p>
+    </div>
+  </div>
+<% end %>
