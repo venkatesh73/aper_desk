@@ -1,0 +1,189 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:finance} />
+
+    <div class="main">
+      <.topbar title="Finance" subtitle={Formats.date(@current_scope, @today)}>
+        <:actions>
+          <a class="btn primary" href={~p"/app/finance/invoices/new"}>+ Invoice</a>
+        </:actions>
+      </.topbar>
+
+      <div class="stats" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat">
+          <div class="k">Outstanding</div>
+          <div class="v">{Money.to_string(@outstanding)}</div>
+          <div class={["d", @overdue != [] && "down"]}>
+            <%= if @overdue == [] do %>
+              Nothing overdue
+            <% else %>
+              {length(@overdue)} overdue · {Money.to_string(@overdue_total)}
+            <% end %>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="k">Collected</div>
+          <div class="v">{Money.to_string(@collected)}</div>
+          <div class="d">Across {length(@invoices)} invoices</div>
+        </div>
+        <div class="stat">
+          <div class="k">Crew payouts due</div>
+          <div class="v">{Money.to_string(@payouts_due)}</div>
+          <div class="d">
+            {Enum.count(@payouts, &(&1.status == "pending"))} pending approval
+          </div>
+        </div>
+        <div class="stat">
+          <div class="k">FX exposure</div>
+          <div class="v">{exposure_headline(@exposure)}</div>
+          <div class="d">{exposure_detail(@exposure)}</div>
+        </div>
+      </div>
+
+      <div class="filters">
+        <span class="eyebrow">Invoices</span>
+        <button
+          class="chip"
+          aria-pressed={to_string(is_nil(@status))}
+          phx-click="status"
+          phx-value-status=""
+        >
+          All
+        </button>
+        <button
+          :for={status <- statuses()}
+          class="chip"
+          aria-pressed={to_string(@status == status)}
+          phx-click="status"
+          phx-value-status={status}
+        >
+          {status_label(status)}
+        </button>
+      </div>
+
+      <div class="split" style="grid-template-columns:1fr 1fr">
+        <div>
+          <div :if={@invoices != []} class="tablewrap">
+            <table style="min-width:520px">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Client</th>
+                  <th>Due</th>
+                  <th>Status</th>
+                  <th style="text-align:right">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  :for={invoice <- @invoices}
+                  onclick={"window.location='/app/finance/invoices/#{invoice.id}'"}
+                  style="cursor:pointer"
+                >
+                  <td class="mono">{invoice.reference}</td>
+                  <td>
+                    {client_name(invoice)}
+                    <span style="display:block;color:var(--faint);font-size:12px">
+                      {status_label(invoice.kind)}
+                    </span>
+                  </td>
+                  <td class={due_tone(invoice) == "bad" && "bad-text"}>
+                    {due_line(@current_scope, invoice, @today)}
+                  </td>
+                  <td>
+                    <span class={["pill", status_tone(invoice.status)]}>
+                      {status_label(invoice.status)}
+                    </span>
+                  </td>
+                  <td class="r">{invoice_outstanding(invoice)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <.empty
+            :if={@invoices == [] and is_nil(@status)}
+            title="No invoices yet"
+            body="An invoice is how the deposit arrives, and how the balance gets chased without you doing it."
+          />
+          <.empty
+            :if={@invoices == [] and not is_nil(@status)}
+            title={"Nothing #{String.downcase(status_label(@status))}"}
+            body="Clear the filter to see the rest."
+          />
+        </div>
+
+        <div>
+          <div :if={@payouts != []} class="tablewrap">
+            <table style="min-width:520px">
+              <thead>
+                <tr>
+                  <th style="width:28px">
+                    <input
+                      type="checkbox"
+                      phx-click="select-all-payouts"
+                      checked={
+                        MapSet.size(@selected) > 0 and
+                          MapSet.size(@selected) ==
+                            Enum.count(@payouts, &(&1.status == "pending"))
+                      }
+                      title="Select every pending payout"
+                    />
+                  </th>
+                  <th>Payout</th>
+                  <th>Person</th>
+                  <th>Shoot</th>
+                  <th>Status</th>
+                  <th style="text-align:right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={payout <- @payouts}>
+                  <td>
+                    <input
+                      :if={payout.status == "pending"}
+                      type="checkbox"
+                      phx-click="toggle-payout"
+                      phx-value-id={payout.id}
+                      checked={MapSet.member?(@selected, payout.id)}
+                    />
+                  </td>
+                  <td class="mono">{payout.reference}</td>
+                  <td>{payout_person(payout)}</td>
+                  <td>{payout_job(payout)}</td>
+                  <td>
+                    <span class={["pill", payout_tone(payout.status)]}>
+                      {status_label(payout.status)}
+                    </span>
+                  </td>
+                  <td class="r">{money(payout.amount_cents, payout.currency)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            :if={MapSet.size(@selected) > 0}
+            class="panel"
+            style="margin-top:10px;display:flex;align-items:center;gap:10px"
+          >
+            <span>
+              <b>{MapSet.size(@selected)} selected</b>
+              <span class="sub">
+                Approved together as one run, or not at all — a half-approved run leaves crew unpaid with no signal.
+              </span>
+            </span>
+            <span class="spacer"></span>
+            <button class="btn primary" phx-click="approve-run">Approve the run</button>
+          </div>
+
+          <.empty
+            :if={@payouts == []}
+            title="Nobody to pay"
+            body="Assign crew to a shoot and their payout shows up here to approve."
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</Layouts.app>

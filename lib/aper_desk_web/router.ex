@@ -100,7 +100,9 @@ defmodule AperDeskWeb.Router do
       live "/quotes", QuotesLive, :index
       live "/quotes/new", QuotesLive, :new
       live "/quotes/:id", QuoteLive, :show
-      live "/finance", SoonLive, :finance
+      live "/finance", FinanceLive, :index
+      live "/finance/invoices/new", InvoiceLive, :new
+      live "/finance/invoices/:id", InvoiceLive, :show
       live "/team", SoonLive, :team
       live "/settings", SoonLive, :settings
     end

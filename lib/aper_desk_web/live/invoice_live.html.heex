@@ -1,0 +1,270 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:finance} />
+
+    <div class="main">
+      <.topbar
+        title={
+          if @live_action == :new,
+            do: "New invoice",
+            else: "#{@invoice.reference} · #{client_name(@invoice)}"
+        }
+        subtitle={
+          if @live_action == :new,
+            do: "Price it, then issue it.",
+            else:
+              "#{outstanding(@invoice)} outstanding of #{money(@invoice.total_cents, @invoice.currency)}"
+        }
+      >
+        <:actions>
+          <a class="btn ghost sm" href={~p"/app/finance"}>← Finance</a>
+          <span :if={@live_action == :show} class={["pill", status_tone(@invoice.status)]}>
+            {status_label(@invoice.status)}
+          </span>
+          <button
+            :if={@live_action == :show and @invoice.status == "draft"}
+            class="btn primary"
+            phx-click="send"
+          >
+            Issue it
+          </button>
+        </:actions>
+      </.topbar>
+
+      <div class="split">
+        <div>
+          <.form for={@form} phx-change="validate" phx-submit="save" class="form formpanel">
+            <.section title="Who and what">
+              <.combo_field
+                id="invoice-contact"
+                field={@form[:contact_id]}
+                label="Client"
+                options={contact_options(@contacts)}
+                prompt="Not linked to a contact yet"
+                search_placeholder="Search contacts"
+              />
+              <.row layout="two">
+                <.select_field field={@form[:kind]} label="What kind" options={kind_options()} />
+                <.select_field
+                  field={@form[:currency]}
+                  label="Currency"
+                  options={currency_options()}
+                />
+              </.row>
+              <.row layout="two">
+                <.text_field field={@form[:issued_on]} label="Issued on" type="date" />
+                <.text_field field={@form[:due_on]} label="Due on" type="date" />
+              </.row>
+            </.section>
+
+            <div class="sect">
+              <div class="sect-head with-action">
+                <h3>Line items</h3>
+                <span class="spacer"></span>
+                <button
+                  :if={editable?(@invoice) or @live_action == :new}
+                  type="button"
+                  class="btn sm"
+                  phx-click="add-line"
+                >
+                  + Add a line
+                </button>
+              </div>
+
+              <div class="lines">
+                <div class="ln">
+                  <span>Description</span>
+                  <span>Qty</span>
+                  <span class="r">Unit price</span>
+                  <span></span>
+                </div>
+                <.inputs_for :let={line} field={@form[:line_items]}>
+                  <div class="ln">
+                    <input
+                      type="text"
+                      name={line[:description].name}
+                      value={line[:description].value}
+                      placeholder="Wedding coverage"
+                      disabled={not (editable?(@invoice) or @live_action == :new)}
+                    />
+                    <input
+                      type="text"
+                      inputmode="decimal"
+                      name={line[:quantity].name}
+                      value={line[:quantity].value}
+                      disabled={not (editable?(@invoice) or @live_action == :new)}
+                    />
+                    <input
+                      type="text"
+                      inputmode="decimal"
+                      class="r"
+                      name={"invoice[line_items][#{line.index}][unit_price_major]"}
+                      value={
+                        line.params["unit_price_major"] ||
+                          Money.to_major(line[:unit_price_cents].value, @invoice.currency)
+                      }
+                      placeholder="0.00"
+                      disabled={not (editable?(@invoice) or @live_action == :new)}
+                    />
+                    <input
+                      :if={line[:id].value}
+                      type="hidden"
+                      name={line[:id].name}
+                      value={line[:id].value}
+                    />
+                    <button
+                      :if={editable?(@invoice) or @live_action == :new}
+                      type="button"
+                      class="btn icon ghost sm"
+                      phx-click="remove-line"
+                      phx-value-index={to_string(line.index)}
+                      title="Remove this line"
+                    >
+                      ×
+                    </button>
+                    <span :if={not (editable?(@invoice) or @live_action == :new)}></span>
+                  </div>
+                </.inputs_for>
+              </div>
+            </div>
+
+            <.section title="Adjustments">
+              <.row layout="two">
+                <.field label="Discount">
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    name="invoice[discount_major]"
+                    value={
+                      @form.params["discount_major"] ||
+                        Money.to_major(@invoice.discount_cents, @invoice.currency)
+                    }
+                    placeholder="0.00"
+                    disabled={not (editable?(@invoice) or @live_action == :new)}
+                  />
+                </.field>
+                <.field label="Tax">
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    name="invoice[tax_major]"
+                    value={
+                      @form.params["tax_major"] ||
+                        Money.to_major(@invoice.tax_cents, @invoice.currency)
+                    }
+                    placeholder="0.00"
+                    disabled={not (editable?(@invoice) or @live_action == :new)}
+                  />
+                </.field>
+              </.row>
+              <.textarea_field field={@form[:notes]} label="Notes" rows={3} />
+            </.section>
+
+            <.form_actions :if={editable?(@invoice) or @live_action == :new}>
+              <button type="submit" class="btn primary">
+                {if @live_action == :new, do: "Draft the invoice", else: "Save the invoice"}
+              </button>
+              <a class="btn ghost" href={~p"/app/finance"}>Back to finance</a>
+            </.form_actions>
+
+            <div :if={@live_action == :show and not editable?(@invoice)} class="hint">
+              <b>This invoice has been issued</b>
+              <span style="display:block;margin-top:2px">
+                The client holds a copy, so it cannot be re-priced. Raise a credit note or a
+                second invoice instead.
+              </span>
+            </div>
+          </.form>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="panel">
+            <div class="ph-head">
+              <h3>Totals</h3>
+            </div>
+            <div class="kv">
+              <span>Subtotal</span>
+              <span>{Money.to_string(@preview.subtotal, cents: true)}</span>
+              <span>Discount</span>
+              <span>−{Money.to_string(@preview.discount, cents: true)}</span>
+              <span>Tax</span>
+              <span>{Money.to_string(@preview.tax, cents: true)}</span>
+            </div>
+            <div class="hr" style="margin:10px 0"></div>
+            <div class="kv" style="font-size:15px;font-weight:700">
+              <span style="color:var(--faint);font-weight:400">Total</span>
+              <span>{Money.to_string(@preview.total, cents: true)}</span>
+            </div>
+            <div :if={@live_action == :show} class="kv" style="margin-top:6px">
+              <span>Paid</span>
+              <span>{money(@invoice.paid_cents, @invoice.currency)}</span>
+              <span>Outstanding</span>
+              <span>{outstanding(@invoice)}</span>
+            </div>
+          </div>
+
+          <div
+            :if={@live_action == :show and @invoice.status not in ~w(draft paid void)}
+            class="panel"
+          >
+            <div class="ph-head">
+              <h3>Record a payment</h3>
+            </div>
+            <form phx-change="payment-change" phx-submit="record-payment" class="form">
+              <.field label={"Amount received (#{@invoice.currency})"}>
+                <input
+                  type="text"
+                  inputmode="decimal"
+                  name="payment[amount_major]"
+                  value={@payment_amount || suggested_payment(@invoice)}
+                />
+              </.field>
+              <.field label="How it arrived">
+                <select name="payment[method]">
+                  <option
+                    :for={{label, value} <- method_options()}
+                    value={value}
+                    selected={value == @payment_method}
+                  >
+                    {label}
+                  </option>
+                </select>
+              </.field>
+              <.field label="Note">
+                <input type="text" name="payment[note]" placeholder="Bank ref, or who paid" />
+              </.field>
+              <.form_actions>
+                <button type="submit" class="btn primary">Record it</button>
+              </.form_actions>
+            </form>
+          </div>
+
+          <div :if={@live_action == :show} class="panel">
+            <div class="ph-head">
+              <h3>Payments</h3>
+            </div>
+            <div :if={@invoice.payments != []} class="list">
+              <div
+                :for={
+                  payment <- Enum.sort_by(@invoice.payments, & &1.received_at, {:desc, DateTime})
+                }
+                class="it"
+              >
+                <span class={["dot", payment.status == "succeeded" && "ok"]}></span>
+                <span style="flex:1;min-width:0">
+                  <b>{money(payment.amount_cents, payment.currency)}</b>
+                  <span class="sub">{payment_line(@current_scope, payment)}</span>
+                </span>
+              </div>
+            </div>
+            <.empty
+              :if={@invoice.payments == []}
+              title="Nothing received yet"
+              body="Payments recorded here update the balance under a row lock, so two people marking the same transfer cannot double-count it."
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layouts.app>

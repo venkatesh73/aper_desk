@@ -71,6 +71,28 @@ defmodule AperDesk.Finance do
   end
 
   @doc """
+  Re-draft an invoice.
+
+  Only a draft. Once an invoice is sent it is a document the client holds a
+  copy of, and silently re-pricing it would leave the two disagreeing about
+  what was owed — issue a credit note or a second invoice instead.
+
+  Loaded through `fetch_invoice/2` so the line items come with it:
+  `Invoice.changeset/2` casts them, and casting an unloaded association raises
+  rather than quietly doing nothing.
+  """
+  def update_invoice(%Scope{} = scope, id, attrs) do
+    with :ok <- Authorization.authorize(scope, :"invoice.write"),
+         {:ok, invoice} <- fetch_invoice(scope, id),
+         :ok <- ensure_draft(invoice) do
+      invoice |> Invoice.changeset(attrs) |> Repo.update()
+    end
+  end
+
+  defp ensure_draft(%Invoice{status: "draft"}), do: :ok
+  defp ensure_draft(%Invoice{status: status}), do: {:error, {:not_editable, status}}
+
+  @doc """
   Issue an invoice to the client.
 
   Stamps the FX rate in force on the issue date. An issued document must always
