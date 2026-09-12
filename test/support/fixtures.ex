@@ -56,6 +56,37 @@ defmodule AperDesk.Fixtures do
   end
 
   @doc """
+  The directory's categories.
+
+  These live in `priv/repo/seeds.exs` rather than in a migration, so the test
+  database has none of them — which made a category filter silently match
+  nothing rather than fail. Any test that touches the directory needs this.
+  """
+  def categories_fixture do
+    [
+      {"wedding", "Wedding"},
+      {"portrait", "Portrait"},
+      {"newborn", "Newborn & family"},
+      {"event", "Event"},
+      {"commercial", "Commercial"},
+      {"product", "Product"},
+      {"real_estate", "Real estate"}
+    ]
+    |> Enum.with_index(1)
+    |> Enum.map(fn {{key, name}, position} ->
+      Repo.insert!(
+        AperDesk.Directory.Category.changeset(%AperDesk.Directory.Category{}, %{
+          key: key,
+          name: name,
+          position: position
+        }),
+        on_conflict: :nothing,
+        conflict_target: :key
+      )
+    end)
+  end
+
+  @doc """
   A plan and an active subscription for `studio`.
 
   Limits default to something generous so a test that is not about limits does

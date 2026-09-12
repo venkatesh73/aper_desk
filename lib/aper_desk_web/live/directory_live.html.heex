@@ -5,7 +5,21 @@
     <a class="brand" href={~p"/"}>
       <img src={~p"/images/logo-long.png"} alt="AperDesk" width="120" height="40" />
     </a>
-    <a class="nl" href={~p"/photographers"} style="color:var(--text)">Find a photographer</a>
+    <a
+      :if={@live_action == :show}
+      class="nl"
+      href={~p"/photographers/#{@city_slug}"}
+    >
+      ← Back to results
+    </a>
+    <a
+      :if={@live_action != :show}
+      class="nl"
+      href={~p"/photographers"}
+      style="color:var(--text)"
+    >
+      Find a photographer
+    </a>
     <span class="spacer"></span>
     <a class="btn" href={~p"/sign-up"}>I'm a photographer</a>
   </nav>
@@ -19,148 +33,467 @@
       <span>{@listing.studio.name}</span>
     </nav>
 
-    <div class="pf-head">
-      <div class={["photo", is_nil(@listing.cover_url) && "ph"]} style="width:64px;height:64px">
-        <img :if={@listing.cover_url} src={@listing.cover_url} alt="" />
+    <%!-- The hero is the work, not the branding. A couple decides from the
+  photographs long before they read a word of the bio. --%>
+    <div :if={@portfolio != []} class="pf-hero">
+      <div :for={item <- Enum.take(@portfolio, 4)} class="photo">
+        <img src={item.url} alt={item.caption || item.title || ""} loading="lazy" />
       </div>
-      <div style="min-width:0">
-        <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:30px">
-          {@listing.studio.name}
-        </h1>
-        <p style="color:var(--muted);margin:4px 0 0">
-          {@listing.headline || where(@listing)}
-        </p>
-        <div class="tags" style="margin-top:8px">
-          <span class="pill">{where(@listing)}</span>
-          <span :if={from_price(@listing)} class="pill">{from_price(@listing)}</span>
-          <span :if={rating(@listing)} class="pill ok">
-            ★ {rating(@listing)} · {@listing.rating_count} reviews
-          </span>
-          <span :if={reply_line(@listing)} class="pill">{reply_line(@listing)}</span>
-          <span :if={travel_line(@listing)} class="pill">{travel_line(@listing)}</span>
-        </div>
+      <div :if={length(@portfolio) > 4} class="photo more">
+        View all {length(@portfolio)} photos
       </div>
     </div>
 
-    <div :if={@portfolio != []} class="gal" style="margin:20px 0">
-      <div :for={item <- Enum.take(@portfolio, 8)} class="photo">
-        <img
-          src={item.url}
-          alt={item.caption || item.title || "Work by #{@listing.studio.name}"}
-          loading="lazy"
-          width={item.width}
-          height={item.height}
-        />
-      </div>
-    </div>
-
-    <div class="split" style="padding-bottom:48px">
+    <div class="pf">
       <div>
-        <div :if={@listing.bio} class="panel">
-          <div class="ph-head">
-            <h3>About</h3>
+        <div class="pf-sec">
+          <div class="pf-head">
+            <div class={["photo", is_nil(@listing.studio.logo_url) && "ph"]}>
+              <img :if={@listing.studio.logo_url} src={@listing.studio.logo_url} alt="" />
+            </div>
+            <div style="min-width:0">
+              <h1>{@listing.studio.name}</h1>
+              <div class="meta">
+                <span>
+                  {where(@listing)}{if travel_line(@listing), do: " · #{travel_line(@listing)}"}
+                </span>
+                <span :if={rating(@listing)}>
+                  <b>{rating(@listing)}</b>
+                  <span class="stars-s">{stars(@listing.rating_avg)}</span>
+                  {@listing.rating_count} reviews
+                </span>
+                <span :if={reply_line(@listing)}>{reply_line(@listing)}</span>
+              </div>
+            </div>
           </div>
-          <p style="color:var(--muted);white-space:pre-wrap;margin:0">{@listing.bio}</p>
+
+          <%!-- Only the facts this studio actually filled in. A row reading
+        "Languages: —" tells a couple nothing and makes the profile look
+        abandoned. --%>
+          <div class="facts">
+            <div :if={@studio_categories != []} class="fact">
+              <div class="k">Style</div>
+              <div class="v">{Enum.map_join(@studio_categories, ", ", & &1.name)}</div>
+            </div>
+            <div :if={@listing.languages != []} class="fact">
+              <div class="k">Languages</div>
+              <div class="v">{Enum.join(@listing.languages, ", ")}</div>
+            </div>
+            <div :if={@listing.rating_count > 0} class="fact">
+              <div class="k">Reviews</div>
+              <div class="v">{@listing.rating_count} from real bookings</div>
+            </div>
+            <div :if={reply_line(@listing)} class="fact">
+              <div class="k">Replies</div>
+              <div class="v">{reply_line(@listing)}</div>
+            </div>
+          </div>
+
+          <p :if={@listing.bio} style="white-space:pre-wrap">{@listing.bio}</p>
         </div>
 
-        <div :if={@reviews != []} class="panel" style="margin-top:12px">
-          <div class="ph-head">
-            <h3>What couples said</h3>
+        <div :if={@portfolio != []} class="pf-sec">
+          <h2>Galleries</h2>
+          <div :if={shoot_types(@portfolio) != []} class="gal-tabs chips">
+            <button
+              class="chip"
+              type="button"
+              aria-pressed={to_string(is_nil(@shoot_type))}
+              phx-click="shoot-type"
+              phx-value-type=""
+            >
+              All
+            </button>
+            <button
+              :for={type <- shoot_types(@portfolio)}
+              class="chip"
+              type="button"
+              aria-pressed={to_string(@shoot_type == type)}
+              phx-click="shoot-type"
+              phx-value-type={type}
+            >
+              {type}
+            </button>
           </div>
-          <div :for={review <- @reviews} class="rev">
-            <div>
-              <b>{review.author_name}</b>
-              <span class="pill ok">★ {review.rating}</span>
-              <p style="color:var(--muted);margin:6px 0 0">{review.body}</p>
-              <p
-                :if={review.studio_reply}
-                style="color:var(--faint);margin:6px 0 0;font-size:12.5px"
-              >
-                {@listing.studio.name} replied: {review.studio_reply}
-              </p>
+
+          <div class="gal">
+            <div
+              :for={{item, index} <- Enum.with_index(portfolio_for(@portfolio, @shoot_type))}
+              class={["photo", rem(index, 5) == 0 && "wide"]}
+            >
+              <img
+                src={item.url}
+                alt={item.caption || item.title || "Work by #{@listing.studio.name}"}
+                loading="lazy"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div :if={@packages != []} class="pf-sec">
+          <h2>Packages</h2>
+          <div class="pkgs">
+            <%!-- The middle one is highlighted because that is the one studios
+          want chosen, and it is the one a couple most often books. --%>
+            <div
+              :for={{package, index} <- Enum.with_index(@packages)}
+              class={["pkg", index == div(length(@packages), 2) && length(@packages) > 1 && "hi"]}
+            >
+              <h3>{package.name}</h3>
+              <div class="price">
+                <span>{package_price(package)}</span>
+                <small :if={package_duration(package)}>
+                  {" · " <> package_duration(package)}
+                </small>
+              </div>
+              <ul>
+                <li :if={package.edited_image_count}>
+                  {package.edited_image_count}+ edited images
+                </li>
+                <li :if={package.crew_size && package.crew_size > 1}>
+                  {package.crew_size} photographers
+                </li>
+                <li :for={item <- Enum.filter(package.items, & &1.included)}>{item.label}</li>
+                <li :if={package.delivery_days}>Delivered in {package.delivery_days} days</li>
+              </ul>
+            </div>
+          </div>
+          <p :if={deposit_line(@packages)} style="font-size:12.5px">{deposit_line(@packages)}</p>
+        </div>
+
+        <div :if={@reviews != []} class="pf-sec">
+          <h2>
+            Reviews{if rating(@listing),
+              do: " · #{rating(@listing)} from #{@listing.rating_count} clients"}
+          </h2>
+          <div class="reviews">
+            <div :for={review <- Enum.take(@reviews, 6)} class="rev">
+              <div class="photo ph"></div>
+              <div>
+                <b>{review.author_name}</b>
+                <span class="s">
+                  {review_meta(review)} · <span class="stars-s">{stars(review.rating)}</span>
+                </span>
+                <p>{review.body}</p>
+                <p :if={review.studio_reply} style="color:var(--faint);font-size:12.5px">
+                  {@listing.studio.name} replied: {review.studio_reply}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
         <.empty
-          :if={@reviews == [] and is_nil(@listing.bio)}
+          :if={@reviews == [] and @packages == [] and @portfolio == [] and is_nil(@listing.bio)}
           title="This studio is still filling in their profile"
-          body="You can still get in touch — enquiries reach them the same way."
+          body="You can still get in touch — an enquiry reaches them the same way."
         />
       </div>
 
-      <div class="panel">
-        <div class="ph-head">
-          <h3>Get in touch</h3>
+      <aside class="inq">
+        <div :if={from_price(@listing)} class="from">
+          <b>{price_only(@listing)}</b>
+          <span>from</span>
         </div>
-        <p style="color:var(--muted);font-size:13px">
-          Tell them the date and where, and they will come back to you.
+
+        <div :if={@availability} class="avail">
+          <span class="dot"></span>{@availability}
+        </div>
+
+        <p :if={@listing.headline} style="font-size:13px;color:var(--muted);margin:0">
+          {@listing.headline}
         </p>
-        <p :if={@listing.languages != []} style="color:var(--faint);font-size:12.5px">
-          Speaks {Enum.join(@listing.languages, ", ")}
-        </p>
-        <a class="btn primary" href={~p"/"} style="width:100%;justify-content:center">
-          Send an enquiry
+
+        <a :if={@enquiry_path} class="btn primary" href={@enquiry_path} style="padding:10px">
+          Check availability &amp; enquire
         </a>
-      </div>
+        <div :if={is_nil(@enquiry_path)} class="fine">
+          This studio has not opened an enquiry form yet.
+        </div>
+
+        <div class="fine">No payment now. The enquiry goes straight to the studio.</div>
+
+        <div class="stat">
+          <div :if={reply_line(@listing)}>
+            <div class="k">Response time</div>
+            <div class="v">{reply_line(@listing)}</div>
+          </div>
+          <div :if={deposit_percent(@packages)}>
+            <div class="k">Deposit</div>
+            <div class="v">{deposit_percent(@packages)}% on signing</div>
+          </div>
+          <div :if={rating(@listing)}>
+            <div class="k">Rating</div>
+            <div class="v">{rating(@listing)} from {@listing.rating_count}</div>
+          </div>
+          <div :if={@listing.languages != []}>
+            <div class="k">Languages</div>
+            <div class="v">{Enum.join(@listing.languages, ", ")}</div>
+          </div>
+        </div>
+      </aside>
     </div>
   <% else %>
-    <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:34px;margin-top:24px">
-      {if @city, do: "Photographers in #{@city.city}", else: "Find a photographer"}
-    </h1>
-    <p style="color:var(--muted);margin-top:6px">
-      {if @city,
-        do: "Compare their work, what they charge and how fast they reply.",
-        else: "Browse by city, or search for the studio you already have in mind."}
-    </p>
+    <%!-- The search bar. It is a form rather than a set of links because the
+  whole thing patches at once — typing a city and pressing Search should be one
+  navigation, not four. --%>
+    <form phx-change="filter" phx-submit="filter">
+      <div class="search">
+        <div class="field">
+          <label for="what">What</label>
+          <.live_component
+            module={AperDeskWeb.Combobox}
+            id="what"
+            name="what"
+            value={@chosen.what}
+            options={Enum.map(@categories, &{&1.name, &1.key})}
+            prompt="Any kind of shoot"
+            on_select="what"
+          />
+        </div>
 
-    <form class="search" method="get" action={~p"/photographers"}>
-      <div class="field">
-        <label for="q">Who or what</label>
-        <input type="text" id="q" name="q" value={@query} placeholder="Documentary wedding" />
+        <div class="field">
+          <label for="where">Where</label>
+          <input
+            type="text"
+            id="where"
+            name="where"
+            value={(@city && @city.city) || @chosen.where}
+            disabled={not is_nil(@city)}
+            placeholder="Lisbon"
+            phx-debounce="400"
+          />
+        </div>
+
+        <div class="field">
+          <label for="date">Date</label>
+          <input type="date" id="date" name="date" class="mono" value={@chosen.date} />
+        </div>
+
+        <div class="field">
+          <label for="budget">Budget</label>
+          <.live_component
+            module={AperDeskWeb.Combobox}
+            id="budget"
+            name="budget"
+            value={@chosen.budget}
+            options={[
+              {"Under 3k", "under-3000"},
+              {"3k – 6k", "3000-6000"},
+              {"6k – 10k", "6000-10000"},
+              {"10k+", "10000+"}
+            ]}
+            prompt="Any"
+            on_select="budget"
+          />
+        </div>
+
+        <button class="btn primary" type="submit">Search</button>
+
+        <%!-- The text search rides along in the same form, so one submit carries
+    everything the searcher typed. --%>
+        <input type="hidden" name="q" value={@chosen.q} />
+        <input type="hidden" name="sort" value={@chosen.sort} />
       </div>
-      <div class="field">
-        <label for="city">Where</label>
-        <input type="text" id="city" name="city" placeholder="Lisbon" />
+
+      <div class="findwrap">
+        <aside class="fside">
+          <%!-- Every control below is carried in the URL, so these hidden fields
+        keep the rest of the search alive when one group changes. --%>
+          <input type="hidden" name="q" value={@chosen.q} />
+          <input type="hidden" name="where" value={@chosen.where} />
+          <input type="hidden" name="what" value={@chosen.what} />
+          <input type="hidden" name="budget" value={@chosen.budget} />
+          <input type="hidden" name="sort" value={@chosen.sort} />
+
+          <div :if={@chosen.date} class="fg">
+            <h4>Available on {@chosen.date}</h4>
+            <label class="chk">
+              <input
+                type="checkbox"
+                name="only_available"
+                value="true"
+                checked={@chosen.only_available}
+              /> Only show available
+            </label>
+          </div>
+          <input :if={@chosen.date} type="hidden" name="date" value={@chosen.date} />
+
+          <div :if={@facets.categories != []} class="fg">
+            <h4>Style</h4>
+            <label :for={facet <- @facets.categories} class="chk">
+              <input
+                type="checkbox"
+                name="style[]"
+                value={facet.key}
+                checked={facet.key in @chosen.styles}
+              />
+              {facet.name}<span class="n">{facet.count}</span>
+            </label>
+          </div>
+
+          <div class="fg">
+            <h4>Price for a full day</h4>
+            <div class="range">
+              <input
+                type="number"
+                name="price_min"
+                class="mono"
+                value={@chosen.price_min}
+                min="0"
+                step="100"
+                placeholder="Any"
+                style="width:72px;padding:4px 6px"
+                phx-debounce="600"
+              />
+              <div class="bar"></div>
+              <input
+                type="number"
+                name="price_max"
+                class="mono"
+                value={@chosen.price_max}
+                min="0"
+                step="100"
+                placeholder="Any"
+                style="width:72px;padding:4px 6px"
+                phx-debounce="600"
+              />
+            </div>
+          </div>
+
+          <div class="fg">
+            <h4>Rating</h4>
+            <label class="chk">
+              <input type="radio" name="rating" value="4.5" checked={@chosen.rating == "4.5"} />
+              4.5 and up<span class="n">{@facets.ratings["4.5"]}</span>
+            </label>
+            <label class="chk">
+              <input type="radio" name="rating" value="4.0" checked={@chosen.rating == "4.0"} />
+              4.0 and up<span class="n">{@facets.ratings["4.0"]}</span>
+            </label>
+            <label class="chk">
+              <input type="radio" name="rating" value="" checked={@chosen.rating in [nil, ""]} />
+              Any<span class="n">{@facets.ratings["any"]}</span>
+            </label>
+          </div>
+
+          <div :if={@facets.languages != []} class="fg">
+            <h4>Languages</h4>
+            <label :for={facet <- @facets.languages} class="chk">
+              <input
+                type="checkbox"
+                name="lang[]"
+                value={facet.language}
+                checked={facet.language in @chosen.languages}
+              />
+              {facet.language}<span class="n">{facet.count}</span>
+            </label>
+          </div>
+
+          <button
+            :if={any_filters?(@chosen)}
+            type="button"
+            class="btn sm ghost"
+            phx-click="clear-filters"
+          >
+            Clear all filters
+          </button>
+        </aside>
+
+        <div>
+          <div class="rhead">
+            <h2>{@total} {if @total == 1, do: "photographer", else: "photographers"}</h2>
+            <span :if={@city} class="sub">in {where(@city)}</span>
+            <span class="spacer"></span>
+            <span class="sub">Sort</span>
+            <div style="width:180px">
+              <.live_component
+                module={AperDeskWeb.Combobox}
+                id="sort"
+                name="sort"
+                value={@chosen.sort}
+                options={[
+                  {"Recommended", "recommended"},
+                  {"Price · low to high", "price"},
+                  {"Rating", "rating"},
+                  {"Fastest reply", "response"}
+                ]}
+                prompt="Recommended"
+                allow_clear={false}
+                on_select="sort"
+              />
+            </div>
+          </div>
+
+          <div :if={@listings != []} class="results">
+            <a :for={listing <- @listings} class="pcard" href={profile_path(listing)}>
+              <div class={["photo", "cover", is_nil(listing.cover_url) && "ph"]}>
+                <img
+                  :if={listing.cover_url}
+                  src={listing.cover_url}
+                  alt={"Work by #{listing.studio.name}"}
+                  loading="lazy"
+                />
+                <span :if={listing.featured} class="tag">Featured</span>
+                <span :if={not listing.featured and reply_badge(listing)} class="tag">
+                  {reply_badge(listing)}
+                </span>
+              </div>
+
+              <div class="body">
+                <div class="who">
+                  <div class={["photo", is_nil(listing.studio.logo_url) && "ph"]}>
+                    <img :if={listing.studio.logo_url} src={listing.studio.logo_url} alt="" />
+                  </div>
+                  <div style="min-width:0">
+                    <b>{listing.studio.name}</b>
+                    <span>{where(listing)}</span>
+                  </div>
+                  <span :if={rating(listing)} class="stars">
+                    <b>{rating(listing)}</b> · {listing.rating_count} reviews
+                  </span>
+                </div>
+
+                <%!-- What they shoot, in the studio's own categories. The
+                headline went here first and overflowed the card — it is a
+                sentence, and this is a row of four-word chips. --%>
+                <div :if={@tags[listing.studio_id]} class="tags">
+                  <span :for={tag <- Enum.take(@tags[listing.studio_id], 3)} class="pill">
+                    {tag}
+                  </span>
+                </div>
+
+                <div class="foot">
+                  <span :if={from_price(listing)} style="white-space:nowrap">
+                    From <b>{price_only(listing)}</b> · full day
+                  </span>
+                  <span :if={is_nil(listing.from_price_cents)}>Price on enquiry</span>
+                  <span :if={travel_line(listing)} class="pill">{travel_line(listing)}</span>
+                </div>
+              </div>
+            </a>
+          </div>
+
+          <.empty
+            :if={@listings == []}
+            title="Nothing matched that search"
+            body="Try widening the filters, or browse another city below."
+          />
+
+          <div
+            :if={@total > length(@listings)}
+            style="display:flex;justify-content:center;margin-top:18px"
+          >
+            <button type="button" class="btn" phx-click="more">
+              Show {min(@total - length(@listings), 12)} more
+            </button>
+          </div>
+        </div>
       </div>
-      <button type="submit" class="btn primary">Search</button>
     </form>
 
-    <div :if={@listings != []} class="results">
-      <a :for={listing <- @listings} class="pcard" href={profile_url(listing)}>
-        <div class={["cover", "photo", is_nil(listing.cover_url) && "ph"]}>
-          <img
-            :if={listing.cover_url}
-            src={listing.cover_url}
-            alt={"Work by #{listing.studio.name}"}
-            loading="lazy"
-          />
-          <span :if={listing.featured} class="tag">Featured</span>
-        </div>
-        <div class="body">
-          <div class="who">
-            <b>{listing.studio.name}</b>
-            <span class="spacer"></span>
-            <span :if={rating(listing)} class="pill ok">★ {rating(listing)}</span>
-          </div>
-          <span style="color:var(--muted);font-size:13px">
-            {listing.headline || where(listing)}
-          </span>
-          <span style="color:var(--faint);font-size:12.5px">
-            {where(listing)}{if from_price(listing), do: " · #{from_price(listing)}"}
-          </span>
-        </div>
-      </a>
-    </div>
-
-    <.empty
-      :if={@listings == []}
-      title="Nobody listed here yet"
-      body="Try another city, or browse everyone below."
-    />
-
     <%!-- The crawler's route to every city page. A hub that links nowhere is
-    a hub no city page is ever found through. --%>
+  a hub no city page is ever found through. --%>
     <div :if={@cities != []} style="padding:28px 0 48px">
       <h2 style="font-size:15px;font-weight:700">Browse by city</h2>
       <div class="chips" style="margin-top:10px">

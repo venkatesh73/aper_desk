@@ -332,6 +332,31 @@ defmodule AperDesk.Scheduling do
     end
   end
 
+  @doc """
+  Studio ids with a shoot on `date`, for the public directory's date filter.
+
+  Deliberately only ids and only a yes/no. The directory asks "can this studio
+  take a wedding on the 14th", and the honest answer to that does not require
+  telling a stranger whose wedding it is, where, or for how much.
+
+  Pencilled counts as busy. A studio holding a date for someone else should not
+  be shown to a searcher as free — the hold exists precisely because it might
+  become a booking.
+  """
+  def studios_busy_on(%Date{} = date) do
+    {:ok, day_start} = DateTime.new(date, ~T[00:00:00.000000], "Etc/UTC")
+    day_end = DateTime.add(day_start, 86_400, :second)
+
+    Repo.all(
+      from j in Job,
+        where:
+          j.status in ["pencilled", "confirmed"] and
+            j.starts_at < ^day_end and j.ends_at > ^day_start,
+        distinct: true,
+        select: j.studio_id
+    )
+  end
+
   ## Internals
 
   defp assign_crew(repo, scope, job, crew) do

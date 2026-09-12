@@ -311,6 +311,22 @@ defmodule AperDesk.Comms do
     end
   end
 
+  @doc """
+  The form a stranger should be sent to when they want to enquire.
+
+  The directory needs one door per studio and has no way to choose between
+  four, so it takes the first active one. Returns nil when a studio has not
+  published any — the profile then says so rather than linking to a 404.
+  """
+  def default_public_form(studio_id) do
+    Repo.one(
+      from f in LeadCaptureForm,
+        where: f.studio_id == ^studio_id and f.active,
+        order_by: [asc: f.inserted_at],
+        limit: 1
+    )
+  end
+
   def fetch_public_form(studio_slug, form_slug) do
     query =
       from f in LeadCaptureForm,

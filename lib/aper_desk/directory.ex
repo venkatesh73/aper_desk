@@ -58,14 +58,98 @@ defmodule AperDesk.Directory do
   with one five-star review does not outrank one with fifty.
   """
   def search(opts \\ []) do
-    DirectoryListing
-    |> where([l], not is_nil(l.published_at))
-    |> filter_listings(opts)
-    |> order_by([l], desc: l.featured, desc: l.rating_avg, desc: l.rating_count)
-    |> limit(^Keyword.get(opts, :limit, 25))
+    opts
+    |> base_query()
+    |> sort_listings(Keyword.get(opts, :sort))
+    |> limit(^Keyword.get(opts, :limit, 24))
+    |> offset(^Keyword.get(opts, :offset, 0))
     |> preload(:studio)
     |> Repo.all()
   end
+
+  @doc "How many published listings match, ignoring paging."
+  def count_matching(opts \\ []) do
+    opts |> base_query() |> exclude(:order_by) |> Repo.aggregate(:count, :id)
+  end
+
+  @doc """
+  The counts beside each filter.
+
+  Each facet is counted with every filter applied *except its own*, which is
+  what makes the numbers useful: showing "Fine art (0)" while fine art is the
+  active filter tells a searcher nothing, whereas showing what they would get
+  by switching to it tells them whether it is worth the click.
+  """
+  def facets(opts \\ []) do
+    %{
+      total: count_matching(opts),
+      categories: category_facets(opts),
+      languages: language_facets(opts),
+      ratings: rating_facets(opts)
+    }
+  end
+
+  defp category_facets(opts) do
+    without = Keyword.delete(opts, :categories)
+
+    counts =
+      without
+      |> base_query()
+      |> exclude(:order_by)
+      |> join(:inner, [l], sc in StudioCategory, on: sc.studio_id == l.studio_id)
+      |> join(:inner, [l, sc], c in Category, on: c.id == sc.category_id)
+      |> group_by([l, sc, c], [c.key, c.name, c.position])
+      |> order_by([l, sc, c], asc: c.position)
+      |> select([l, sc, c], %{key: c.key, name: c.name, count: count(l.id)})
+      |> Repo.all()
+
+    counts
+  end
+
+  defp language_facets(opts) do
+    without = Keyword.delete(opts, :languages)
+
+    without
+    |> base_query()
+    |> exclude(:order_by)
+    |> select([l], l.languages)
+    |> Repo.all()
+    |> List.flatten()
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {language, count} -> {-count, language} end)
+    |> Enum.map(fn {language, count} -> %{language: language, count: count} end)
+  end
+
+  defp rating_facets(opts) do
+    without = Keyword.delete(opts, :min_rating)
+
+    Map.new([{"4.5", Decimal.new("4.5")}, {"4.0", Decimal.new("4.0")}], fn {label, min} ->
+      {label, without |> Keyword.put(:min_rating, min) |> count_matching()}
+    end)
+    |> Map.put("any", count_matching(without))
+  end
+
+  defp base_query(opts) do
+    DirectoryListing
+    |> where([l], not is_nil(l.published_at))
+    |> filter_listings(opts)
+  end
+
+  # Nulls last everywhere it matters. A studio that has not published a price
+  # is not the cheapest one, and sorting it to the top of "price, low to high"
+  # would reward leaving the field blank.
+  defp sort_listings(query, "price"),
+    do: order_by(query, [l], asc_nulls_last: l.from_price_cents, desc: l.rating_avg)
+
+  defp sort_listings(query, "rating"),
+    do: order_by(query, [l], desc_nulls_last: l.rating_avg, desc: l.rating_count)
+
+  defp sort_listings(query, "response"),
+    do: order_by(query, [l], asc_nulls_last: l.response_time_minutes, desc: l.rating_avg)
+
+  defp sort_listings(query, _recommended),
+    do:
+      order_by(query, [l], desc: l.featured, desc_nulls_last: l.rating_avg, desc: l.rating_count)
 
   @doc """
   One studio's public profile, by its slug.
@@ -159,6 +243,55 @@ defmodule AperDesk.Directory do
         end)
       end)
     end
+  end
+
+  ## What a profile page shows
+
+  @doc """
+  A studio's public packages, cheapest first, with what each includes.
+
+  `public` is the studio's own switch — a package built for one corporate
+  client at a negotiated rate is not a price the world should read as this
+  studio's rate. Archived packages are excluded for the same reason.
+  """
+  def list_public_packages(studio_id) do
+    Repo.all(
+      from p in AperDesk.Catalog.Package,
+        where: p.studio_id == ^studio_id and p.public and is_nil(p.archived_at),
+        order_by: [asc: p.price_cents, asc: p.position],
+        preload: [items: ^from(i in AperDesk.Catalog.PackageItem, order_by: i.position)]
+    )
+  end
+
+  @doc """
+  Categories for many studios at once, as `%{studio_id => [name]}`.
+
+  One query for a page of results rather than one per card. The cards need
+  this to say what a studio shoots, and a directory that issues twenty-five
+  extra queries to draw one grid will not stay fast for long.
+  """
+  def categories_for(studio_ids) when is_list(studio_ids) do
+    Repo.all(
+      from sc in StudioCategory,
+        join: c in Category,
+        on: c.id == sc.category_id,
+        where: sc.studio_id in ^studio_ids,
+        order_by: [desc: sc.primary_category, asc: c.position],
+        select: {sc.studio_id, c.name}
+    )
+    |> Enum.group_by(fn {studio_id, _name} -> studio_id end, fn {_id, name} -> name end)
+  end
+
+  @doc "The categories one studio is listed under, primary first."
+  def studio_categories(studio_id) do
+    Repo.all(
+      from sc in StudioCategory,
+        join: c in Category,
+        on: c.id == sc.category_id,
+        where: sc.studio_id == ^studio_id,
+        order_by: [desc: sc.primary_category, asc: c.position],
+        select: %{key: c.key, name: c.name, primary: sc.primary_category}
+    )
   end
 
   ## Portfolio
@@ -263,12 +396,57 @@ defmodule AperDesk.Directory do
 
   defp filter_listings(query, opts) do
     Enum.reduce(opts, query, fn
-      {:city, city}, q -> where(q, [l], ilike(l.city, ^city))
-      {:city_slug, slug}, q -> where(q, [l], fragment("lower(?)", l.city) == ^slug_to_like(slug))
-      {:country_code, code}, q -> where(q, [l], l.country_code == ^code)
-      {:query, term}, q -> where(q, [l], ilike(l.headline, ^"%#{term}%"))
-      {:max_price_cents, max}, q -> where(q, [l], l.from_price_cents <= ^max)
-      _, q -> q
+      {:city, city}, q ->
+        where(q, [l], ilike(l.city, ^city))
+
+      {:city_slug, slug}, q ->
+        where(q, [l], fragment("lower(?)", l.city) == ^slug_to_like(slug))
+
+      {:country_code, code}, q ->
+        where(q, [l], l.country_code == ^code)
+
+      # Headline and bio both, because a searcher typing "elopement" is
+      # describing the work, and the work is described in the bio at least as
+      # often as in the one-line headline.
+      {:query, term}, q when is_binary(term) and term != "" ->
+        pattern = "%#{term}%"
+        where(q, [l], ilike(l.headline, ^pattern) or ilike(l.bio, ^pattern))
+
+      {:max_price_cents, max}, q ->
+        where(q, [l], l.from_price_cents <= ^max)
+
+      {:min_price_cents, min}, q ->
+        where(q, [l], l.from_price_cents >= ^min)
+
+      {:min_rating, min}, q ->
+        where(q, [l], l.rating_avg >= ^min)
+
+      # Any of the chosen languages, not all of them. A couple who speak
+      # English and German want whoever can talk to them, not the rarer
+      # photographer who happens to speak both.
+      {:languages, [_ | _] = languages}, q ->
+        where(q, [l], fragment("? && ?", l.languages, ^languages))
+
+      {:categories, [_ | _] = keys}, q ->
+        where(
+          q,
+          [l],
+          l.studio_id in subquery(
+            from sc in StudioCategory,
+              join: c in Category,
+              on: c.id == sc.category_id,
+              where: c.key in ^keys,
+              select: sc.studio_id
+          )
+        )
+
+      {:available_on, %Date{} = date}, q ->
+        # Asked of Scheduling rather than joined here, so the directory learns
+        # only which studios are busy and nothing about what they are busy with.
+        where(q, [l], l.studio_id not in ^AperDesk.Scheduling.studios_busy_on(date))
+
+      _, q ->
+        q
     end)
   end
 end
