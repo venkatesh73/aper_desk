@@ -200,6 +200,12 @@ defmodule AperDeskWeb.AuthController do
   defp invitation_error({:limit_reached, _key, _used, _limit}),
     do: "This studio is at its plan's limit. Ask them to move up a plan."
 
+  # The person holding the link cannot fix the studio's billing, so the message
+  # says whose problem it is rather than implying they did something wrong.
+  defp invitation_error(:no_subscription),
+    do:
+      "This studio has no active plan, so it cannot take anybody on. Ask them to sort their billing."
+
   defp invitation_error(%Ecto.Changeset{}),
     do: "You are already a member of this studio."
 

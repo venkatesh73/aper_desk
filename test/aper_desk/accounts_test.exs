@@ -78,7 +78,10 @@ defmodule AperDesk.AccountsTest do
 
   describe "invitations" do
     test "grant the invited role and cannot be reused" do
-      %{scope: scope} = studio_fixture()
+      %{studio: studio, scope: scope} = studio_fixture()
+      # Accepting claims a seat against the plan, as every other limited
+      # resource does, so a studio without one has nothing to claim against.
+      plan_fixture(studio)
 
       {:ok, token, invitation} =
         Accounts.invite_member(scope, %{email: " Second@Example.com ", role: "photographer"})
@@ -95,6 +98,26 @@ defmodule AperDesk.AccountsTest do
       assert {:ok, membership} = Accounts.accept_invitation(token, invitee)
       assert membership.role == "photographer"
       assert {:error, :already_accepted} = Accounts.accept_invitation(token, invitee)
+    end
+
+    test "a studio with no plan cannot take on anybody" do
+      %{scope: scope} = studio_fixture()
+
+      {:ok, token, _invitation} =
+        Accounts.invite_member(scope, %{email: "second@example.com", role: "photographer"})
+
+      {:ok, invitee} =
+        Accounts.register_user(%{
+          email: "second@example.com",
+          name: "Second",
+          password: "yet another long passphrase"
+        })
+
+      # Every limit check reads the plan, so no plan means no headroom to
+      # claim. Refusing is right — a lapsed studio should not keep growing —
+      # but the invitee cannot fix it, so the message has to say whose problem
+      # it is.
+      assert {:error, :no_subscription} = Accounts.accept_invitation(token, invitee)
     end
   end
 
