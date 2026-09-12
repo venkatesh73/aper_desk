@@ -1,100 +1,137 @@
 <%= if @form do %>
   <Layouts.flash_group flash={@flash} />
 
-  <div class="cg">
-    <div class="cg-nav">
-      <b>{@form.studio.name}</b>
+  <div class="pub">
+    <%!-- The studio's own work carries this page. A stranger deciding whether
+    to write to a photographer is deciding from a photograph. --%>
+    <div class={["photo", is_nil(@hero) && "ph"]}>
+      <img :if={@hero} src={@hero} alt={"Work by #{@form.studio.name}"} />
+      <div :if={@caption} class="cap">{@caption}</div>
     </div>
 
-    <div style="max-width:560px;margin:0 auto;padding:40px 24px 64px">
+    <div class="fwrap">
+      <span class="brand">{@form.studio.name}</span>
+
       <%= if @sent do %>
-        <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:32px">
-          {@form.success_message || "Thank you"}
-        </h1>
-        <p style="color:var(--muted);margin-top:10px">
-          {@form.studio.name} has your enquiry and will be in touch.
-        </p>
+        <div>
+          <h1>{@form.success_message || "Thank you"}</h1>
+          <p class="sub">
+            {@form.studio.name} has your enquiry and will be in touch.
+          </p>
+        </div>
       <% else %>
-        <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:32px">
-          {@form.headline || @form.name}
-        </h1>
-        <p :if={@form.intro} style="color:var(--muted);margin-top:8px">{@form.intro}</p>
+        <div>
+          <h1>{@form.headline || @form.name}</h1>
+          <p :if={@form.intro} class="sub">{@form.intro}</p>
+        </div>
 
         <.form
           for={to_form(%{}, as: :answers)}
           phx-change="validate"
           phx-submit="submit"
-          class="form"
-          style="margin-top:20px"
+          style="display:contents"
         >
-          <.field
-            :for={field <- @fields}
-            label={field["label"]}
-            hint={if required?(field), do: "Required"}
-          >
-            <%= case input_type(field["type"]) do %>
-              <% "textarea" -> %>
-                <textarea
-                  name={"answers[#{field["key"]}]"}
-                  rows="4"
-                  placeholder={field["placeholder"]}
-                  required={required?(field)}
-                >{value_for(@answers, field)}</textarea>
-              <% "select" -> %>
-                <%!-- The one native select left in the product, deliberately.
-                Everywhere a studio works is the combobox; this page is filled
-                in by a stranger on their phone, where the OS wheel picker beats
-                any custom panel, and it still submits if the socket drops. A
-                dropdown the client cannot use is a lead that never arrives. --%>
-                <select name={"answers[#{field["key"]}]"} required={required?(field)}>
-                  <option value="">Choose one</option>
-                  <option
-                    :for={option <- options_for(field)}
-                    value={option}
-                    selected={option == value_for(@answers, field)}
-                  >
-                    {option}
-                  </option>
-                </select>
-              <% "checkbox" -> %>
-                <label class="checkfield">
-                  <input type="hidden" name={"answers[#{field["key"]}]"} value="" />
-                  <input
-                    type="checkbox"
-                    name={"answers[#{field["key"]}]"}
-                    value="yes"
-                    checked={value_for(@answers, field) == "yes"}
-                  />
-                  <span>{field["label"]}</span>
+          <%= for {kind, group} <- field_rows(@fields) do %>
+            <div class={kind == :narrow && length(group) > 1 && "grid2"}>
+              <div :for={field <- group} class="field">
+                <label for={field["key"]}>
+                  {field["label"]}
+                  <span :if={required?(field)} style="color:var(--faint)">·  required</span>
                 </label>
-              <% type -> %>
-                <input
-                  type={type}
-                  name={"answers[#{field["key"]}]"}
-                  value={value_for(@answers, field)}
-                  placeholder={field["placeholder"]}
-                  required={required?(field)}
-                />
-            <% end %>
 
-            <span :if={error_for(@errors, field)} class="bad-text" style="font-size:12px">
-              This one {error_for(@errors, field)}
+                <%= cond do %>
+                  <% chips?(field) -> %>
+                    <%!-- A radio a thumb can hit. Still a plain hidden input
+                    underneath, so the submission path is unchanged. --%>
+                    <input
+                      type="hidden"
+                      name={"answers[#{field["key"]}]"}
+                      value={value_for(@answers, field)}
+                    />
+                    <div class="chips">
+                      <button
+                        :for={option <- options_for(field)}
+                        type="button"
+                        class="chip"
+                        aria-pressed={to_string(value_for(@answers, field) == option)}
+                        phx-click="choose"
+                        phx-value-key={field["key"]}
+                        phx-value-option={option}
+                      >
+                        {option}
+                      </button>
+                    </div>
+                  <% input_type(field["type"]) == "textarea" -> %>
+                    <textarea
+                      id={field["key"]}
+                      name={"answers[#{field["key"]}]"}
+                      rows="4"
+                      placeholder={field["placeholder"]}
+                      required={required?(field)}
+                    >{value_for(@answers, field)}</textarea>
+                  <% input_type(field["type"]) == "select" -> %>
+                    <%!-- The one native select left in the product, deliberately.
+                    Everywhere a studio works is the combobox; this page is filled
+                    in by a stranger on their phone, where the OS wheel picker beats
+                    any custom panel, and it still submits if the socket drops. A
+                    dropdown the client cannot use is a lead that never arrives. --%>
+                    <select
+                      id={field["key"]}
+                      name={"answers[#{field["key"]}]"}
+                      required={required?(field)}
+                    >
+                      <option value="">Choose one</option>
+                      <option
+                        :for={option <- options_for(field)}
+                        value={option}
+                        selected={option == value_for(@answers, field)}
+                      >
+                        {option}
+                      </option>
+                    </select>
+                  <% input_type(field["type"]) == "checkbox" -> %>
+                    <label class="checkfield">
+                      <input type="hidden" name={"answers[#{field["key"]}]"} value="" />
+                      <input
+                        type="checkbox"
+                        name={"answers[#{field["key"]}]"}
+                        value="yes"
+                        checked={value_for(@answers, field) == "yes"}
+                      />
+                      <span>{field["label"]}</span>
+                    </label>
+                  <% true -> %>
+                    <input
+                      type={input_type(field["type"])}
+                      id={field["key"]}
+                      name={"answers[#{field["key"]}]"}
+                      value={value_for(@answers, field)}
+                      placeholder={field["placeholder"]}
+                      required={required?(field)}
+                    />
+                <% end %>
+
+                <span :if={error_for(@errors, field)} class="bad-text" style="font-size:12px">
+                  This one {error_for(@errors, field)}
+                </span>
+              </div>
+            </div>
+          <% end %>
+
+          <div class="actions">
+            <button type="submit" class="btn primary" disabled={@fields == []}>
+              Send enquiry
+            </button>
+            <span class="help" style="color:var(--faint);font-size:12px">
+              No spam. One reply from a real photographer.
             </span>
-          </.field>
-
-          <.form_actions>
-            <button type="submit" class="btn primary" disabled={@fields == []}>Send it</button>
-          </.form_actions>
+          </div>
 
           <p :if={@fields == []} style="color:var(--muted);font-size:13px;margin:0">
             This form has no questions yet.
           </p>
         </.form>
       <% end %>
-    </div>
-
-    <div class="cg-foot">
-      <span>{@form.studio.name}</span>
     </div>
   </div>
 <% else %>

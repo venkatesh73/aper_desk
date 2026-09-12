@@ -1,0 +1,219 @@
+<Layouts.flash_group flash={@flash} />
+
+<div class="bk">
+  <div class="bk-top">
+    <div class={["photo", is_nil(@studio.logo_url) && "ph"]}>
+      <img :if={@studio.logo_url} src={@studio.logo_url} alt="" />
+    </div>
+    <div>
+      <b>Book a session with {@studio.name}</b>
+      <span>Pick a session, then a time that suits you</span>
+    </div>
+    <span class="spacer"></span>
+    <a class="btn ghost sm" href={~p"/photographers"}>Find another photographer</a>
+  </div>
+
+  <div class="bk-steps">
+    <span class={step_state(1, assigns)}><i>1</i>Session</span>
+    <span class={step_state(2, assigns)}><i>2</i>Date &amp; time</span>
+    <span class={step_state(3, assigns)}><i>3</i>Your details</span>
+    <span class={step_state(4, assigns)}><i>4</i>Confirm</span>
+  </div>
+
+  <%= if @booked do %>
+    <div style="padding:48px 0;max-width:520px">
+      <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:32px">
+        That time is yours
+      </h1>
+      <p style="color:var(--muted);margin-top:10px">
+        {@studio.name} has the booking for
+        <b>{Calendar.strftime(@booked.starts_at, "%A %-d %B")}</b>
+        at <b>{clock(@booked.starts_at, @studio.time_zone)}</b>, and will confirm by email.
+      </p>
+      <p style="color:var(--faint);font-size:12.5px;margin-top:10px">
+        No payment has been taken. Any deposit is arranged with the studio directly.
+      </p>
+    </div>
+  <% else %>
+    <div class="bk-grid">
+      <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+        <div :if={@sessions != []}>
+          <span class="eyebrow" style="display:block;margin-bottom:8px">Session</span>
+          <div class="sess">
+            <button
+              :for={session <- @sessions}
+              type="button"
+              aria-pressed={to_string(@session && @session.id == session.id)}
+              phx-click="session"
+              phx-value-id={session.id}
+            >
+              <b>{session.name}</b>
+              <span>
+                {[session_length(session), session.summary]
+                |> Enum.reject(&is_nil/1)
+                |> Enum.join(" · ")}
+              </span>
+              <span>{session_price(session)}</span>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <span class="eyebrow" style="display:block;margin-bottom:8px">Pick a day</span>
+          <div class="bk-cal">
+            <div class="bk-month">
+              <div class="mh">
+                <button
+                  class="btn icon ghost sm"
+                  type="button"
+                  phx-click="month"
+                  phx-value-by="-1"
+                >
+                  ‹
+                </button>
+                <h3>{Calendar.strftime(@month, "%B %Y")}</h3>
+                <button class="btn icon ghost sm" type="button" phx-click="month" phx-value-by="1">
+                  ›
+                </button>
+              </div>
+
+              <div class="dow">
+                <span :for={day <- ~w(Mon Tue Wed Thu Fri Sat Sun)}>{day}</span>
+              </div>
+
+              <div class="dg">
+                <%= for week <- weeks(@month), date <- week do %>
+                  <%!-- A day with no open slot is not clickable. The studio's
+                  reasons for being unavailable are theirs, and this page shows
+                  what can be booked rather than what cannot. --%>
+                  <button
+                    type="button"
+                    class={[
+                      "bd",
+                      (date.month != @month.month or is_nil(@slots_by_day[date])) && "off",
+                      @slots_by_day[date] && date.month == @month.month && "av",
+                      @day == date && "pick"
+                    ]}
+                    disabled={is_nil(@slots_by_day[date]) or date.month != @month.month}
+                    phx-click="day"
+                    phx-value-date={Date.to_iso8601(date)}
+                  >
+                    {date.day}
+                  </button>
+                <% end %>
+              </div>
+
+              <div class="legend" style="margin-top:10px">
+                <span>
+                  <i style="background:var(--ok-soft);border:1px solid var(--ok)"></i>Available
+                </span>
+                <span><i style="background:var(--line)"></i>Nothing open</span>
+                <span><i style="background:var(--accent)"></i>Selected</span>
+              </div>
+            </div>
+
+            <div class="slots">
+              <h4>
+                {if @day, do: Calendar.strftime(@day, "%a %-d %b"), else: "Pick a day"}
+              </h4>
+              <span class="tz">Times in {@studio.time_zone}</span>
+
+              <%= if @day && @slots_by_day[@day] do %>
+                <button
+                  :for={slot <- @slots_by_day[@day]}
+                  type="button"
+                  aria-pressed={to_string(@slot && @slot.id == slot.id)}
+                  phx-click="slot"
+                  phx-value-id={slot.id}
+                >
+                  <span>{clock(slot.starts_at, @studio.time_zone)}</span>
+                  <span>{slot_length(slot)}</span>
+                </button>
+              <% else %>
+                <span class="tz">
+                  {if @day,
+                    do: "Nothing open that day.",
+                    else: "Days with something open are marked on the calendar."}
+                </span>
+              <% end %>
+            </div>
+          </div>
+        </div>
+
+        <div :if={@slots == []} style="padding-bottom:24px">
+          <.empty
+            title="No open times this month"
+            body="Try the next month, or send the studio an enquiry instead."
+          />
+        </div>
+      </div>
+
+      <aside class="bk-sum">
+        <span class="eyebrow">Your booking</span>
+        <div class="kv">
+          <span>Session</span>
+          <span>{(@session && @session.name) || "Not chosen"}</span>
+          <span>When</span>
+          <span class="mono">
+            {if @slot,
+              do:
+                "#{Calendar.strftime(@slot.starts_at, "%a %-d %b")} · #{clock(@slot.starts_at, @studio.time_zone)}",
+              else: "Not chosen"}
+          </span>
+          <span>With</span>
+          <span>{@studio.name}</span>
+          <span :if={@session}>Price</span>
+          <span :if={@session}>{session_price(@session)}</span>
+          <span :if={deposit_amount(@session)}>Deposit</span>
+          <span :if={deposit_amount(@session)}>
+            <b>{deposit_amount(@session)}</b> · {@session.deposit_percent}%
+          </span>
+        </div>
+
+        <div class="hr"></div>
+
+        <form phx-change="details" phx-submit="confirm" style="display:contents">
+          <div class="field">
+            <label for="booking-name">Your name</label>
+            <input id="booking-name" name="booking[name]" value={@details["name"]} required />
+          </div>
+          <div class="field">
+            <label for="booking-email">Email</label>
+            <input
+              id="booking-email"
+              type="email"
+              name="booking[email]"
+              value={@details["email"]}
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="booking-phone">Phone (optional)</label>
+            <input
+              id="booking-phone"
+              class="mono"
+              name="booking[phone]"
+              value={@details["phone"]}
+            />
+          </div>
+          <div class="field">
+            <label for="booking-notes">Anything to know?</label>
+            <textarea id="booking-notes" name="booking[notes]" style="min-height:56px">{@details["notes"]}</textarea>
+          </div>
+
+          <p :if={@error} class="bad-text" style="font-size:12.5px;margin:0">{@error}</p>
+
+          <button class="btn primary" type="submit" style="padding:10px" disabled={is_nil(@slot)}>
+            {if @slot, do: "Confirm this time", else: "Pick a time first"}
+          </button>
+        </form>
+
+        <%!-- The deposit is shown above because the studio set it and it is
+        real. Nothing here takes a payment, so the button does not claim to. --%>
+        <span class="help" style="font-size:12px;color:var(--faint);text-align:center">
+          No payment now. The studio confirms by email and arranges any deposit.
+        </span>
+      </aside>
+    </div>
+  <% end %>
+</div>

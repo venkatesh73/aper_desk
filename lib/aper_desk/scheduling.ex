@@ -308,13 +308,61 @@ defmodule AperDesk.Scheduling do
   end
 
   @doc """
+  Every open slot for a studio, with the session each one is for.
+
+  Public: no scope, because the person choosing a Saturday afternoon has no
+  account. Only `status: "open"` rows are ever returned, so a held or booked
+  slot is not merely greyed out on the page — it is not sent to the browser.
+  """
+  def open_slots_for(studio_id, from, to) do
+    Repo.all(
+      from s in BookingSlot,
+        where:
+          s.studio_id == ^studio_id and s.status == "open" and
+            s.starts_at >= ^from and s.starts_at < ^to,
+        order_by: s.starts_at,
+        preload: [:package]
+    )
+  end
+
+  @doc """
   Take a slot from the public booking page.
 
   The status guard is in the WHERE clause, so two clients submitting the same
   slot at once cannot both win: the second update matches zero rows and gets
   `{:error, :slot_taken}` rather than silently overwriting the first booking.
+
+  Claiming the slot and creating the lead are one transaction. A slot marked
+  booked with no lead behind it is a studio holding a Saturday for nobody, and
+  a lead with no slot is a client who thinks they have a time and does not.
   """
-  def book_slot(slot_id, email) when is_binary(email) do
+  def book_slot(slot_id, attrs) when is_map(attrs) do
+    email = attrs["email"] || attrs[:email]
+
+    Repo.transaction(fn ->
+      # Preloaded after the claim: `update_all` returns the row without its
+      # associations, and reading `slot.package` off that raises rather than
+      # returning nil.
+      with {:ok, claimed} <- claim_slot(slot_id, email),
+           slot <- Repo.preload(claimed, :package),
+           studio when not is_nil(studio) <- Repo.get(AperDesk.Accounts.Studio, slot.studio_id),
+           scope <- public_scope(studio),
+           {:ok, contact} <- contact_for_booking(scope, attrs),
+           {:ok, lead} <- lead_for_booking(scope, slot, contact, attrs),
+           {:ok, slot} <- link_lead(slot, lead) do
+        %{slot: slot, lead: lead, contact: contact}
+      else
+        nil -> Repo.rollback(:not_found)
+        {:error, reason} -> Repo.rollback(reason)
+        other -> Repo.rollback(other)
+      end
+    end)
+  end
+
+  def book_slot(slot_id, email) when is_binary(email),
+    do: book_slot(slot_id, %{"email" => email})
+
+  defp claim_slot(slot_id, email) do
     now = DateTime.utc_now()
 
     {count, slots} =
@@ -328,8 +376,51 @@ defmodule AperDesk.Scheduling do
 
     case {count, slots} do
       {1, [slot]} -> {:ok, slot}
-      _ -> {:error, :slot_taken}
+      _taken -> {:error, :slot_taken}
     end
+  end
+
+  # No user, because there is not one: the booking came from a stranger. The
+  # contexts accept this shape on their public paths and nowhere else.
+  defp public_scope(studio) do
+    %Scope{
+      studio: studio,
+      currency: studio.base_currency || "USD",
+      time_zone: studio.time_zone || "Etc/UTC"
+    }
+  end
+
+  defp contact_for_booking(scope, attrs) do
+    AperDesk.Crm.upsert_contact(scope, %{
+      "name" => attrs["name"] || attrs["email"] || "Booking",
+      "email" => attrs["email"],
+      "phone" => attrs["phone"],
+      "source" => "booking"
+    })
+  end
+
+  defp lead_for_booking(scope, slot, contact, attrs) do
+    AperDesk.Crm.create_lead(scope, %{
+      "contact_id" => contact.id,
+      "title" => booking_title(slot, attrs),
+      "shoot_type" => (slot.package && slot.package.shoot_type) || "other",
+      "source" => "booking",
+      "source_detail" => DateTime.to_iso8601(slot.starts_at),
+      "desired_date" => DateTime.to_date(slot.starts_at),
+      "location" => attrs["location"],
+      # `custom_fields` is the studio's own defined schema and drops anything
+      # undefined, so this does not go there.
+      "notes" => attrs["notes"]
+    })
+  end
+
+  defp booking_title(slot, attrs) do
+    session = attrs["session_name"] || (slot.package && slot.package.name) || "Session"
+    "#{session} · #{Calendar.strftime(slot.starts_at, "%-d %b %Y")}"
+  end
+
+  defp link_lead(slot, lead) do
+    slot |> Ecto.Changeset.change(lead_id: lead.id) |> Repo.update()
   end
 
   @doc """

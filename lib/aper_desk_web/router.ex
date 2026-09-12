@@ -70,6 +70,10 @@ defmodule AperDeskWeb.Router do
 
     # The consumer half. These are the only pages in the product built to be
     # found by a stranger, so they are the only ones that opt into indexing.
+    # Booking a session, which the scheduling context could do from the first
+    # commit with no page in front of it.
+    live "/book/:studio", BookingLive, :show
+
     live "/photographers", DirectoryLive, :index
     live "/photographers/:city", DirectoryLive, :city
     live "/photographers/:city/:slug", DirectoryLive, :show

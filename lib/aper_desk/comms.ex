@@ -29,6 +29,7 @@ defmodule AperDesk.Comms do
   }
 
   alias AperDesk.Crm
+  alias AperDesk.Crm.Lead
   alias AperDesk.Repo
   alias AperDesk.Scope
   alias AperDesk.Scoped
@@ -437,7 +438,7 @@ defmodule AperDesk.Comms do
     Crm.create_lead(scope, %{
       "contact_id" => contact.id,
       "title" => parsed["title"] || parsed["subject"] || "Enquiry",
-      "shoot_type" => parsed["shoot_type"] || "other",
+      "shoot_type" => shoot_type_from(parsed["shoot_type"]),
       "source" => "email",
       "source_detail" => capture.parser_version
     })
@@ -448,11 +449,47 @@ defmodule AperDesk.Comms do
       "contact_id" => contact.id,
       "owner_id" => form.assign_to_id,
       "title" => answers["title"] || form.name,
-      "shoot_type" => answers["shoot_type"] || "other",
+      "shoot_type" => shoot_type_from(answers["shoot_type"]),
       "source" => "form",
       "source_detail" => form.slug
     })
   end
+
+  @doc false
+  # A studio writes its own options, and it writes them for a person to read:
+  # "Brand / commercial", "Newborn & family". `Lead.shoot_type` is an enum of
+  # keys. Passing the label straight through made the changeset invalid, the
+  # transaction roll back, and the client see "that did not send" — so any
+  # studio whose form offered readable options had a form that never worked.
+  #
+  # Anything unrecognised becomes "other" rather than failing: a lead filed
+  # under the wrong shoot type is a lead; a rejected submission is not.
+  def shoot_type_from(nil), do: "other"
+  def shoot_type_from(""), do: "other"
+
+  def shoot_type_from(value) when is_binary(value) do
+    normalised =
+      value
+      |> String.downcase()
+      |> String.trim()
+      |> String.replace(~r/[^a-z]+/, "_")
+      |> String.trim("_")
+
+    cond do
+      normalised in Lead.shoot_types() ->
+        normalised
+
+      # "Brand / commercial" -> "brand_commercial": no exact key, but the word
+      # "commercial" is in there and is the key the studio meant.
+      match = Enum.find(Lead.shoot_types(), &String.contains?(normalised, &1)) ->
+        match
+
+      true ->
+        "other"
+    end
+  end
+
+  def shoot_type_from(_other), do: "other"
 
   defp insert_submission(form, lead, answers, meta) do
     %FormSubmission{}

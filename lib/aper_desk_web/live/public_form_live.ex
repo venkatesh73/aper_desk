@@ -21,6 +21,7 @@ defmodule AperDeskWeb.PublicFormLive do
 
   alias AperDesk.Comms
   alias AperDesk.Comms.LeadCaptureForm
+  alias AperDesk.Directory
 
   @impl true
   def mount(%{"studio" => studio_slug, "form" => form_slug}, _session, socket) do
@@ -31,6 +32,8 @@ defmodule AperDeskWeb.PublicFormLive do
          |> assign(page_title: form.headline || form.name)
          |> assign(form: form, fields: LeadCaptureForm.field_list(form))
          |> assign(answers: %{}, errors: %{}, sent: false)
+         |> assign(hero: hero_for(form.studio_id))
+         |> assign(caption: caption_for(form))
          # Read here because `get_connect_info/2` is only legal during mount,
          # and the submission that wants it happens later.
          |> assign(user_agent: connected?(socket) && get_connect_info(socket, :user_agent))
@@ -41,7 +44,22 @@ defmodule AperDeskWeb.PublicFormLive do
     end
   end
 
+  # A chip is a radio the client can hit with a thumb. It writes into the same
+  # answers map as every other field, so the submission path does not know the
+  # difference.
+  #
+  # `phx-value-option`, not `phx-value-value`: for a button LiveView merges the
+  # element's own `value` property into the params under "value", which
+  # silently wins over the attribute and arrives as "". LiveViewTest reads the
+  # attributes directly, so a test cannot see this — only a browser can.
   @impl true
+  def handle_event("choose", %{"key" => key, "option" => value}, socket) do
+    answers = socket.assigns.answers
+    chosen = if Map.get(answers, key) == value, do: "", else: value
+
+    {:noreply, assign(socket, answers: Map.put(answers, key, chosen))}
+  end
+
   def handle_event("validate", %{"answers" => answers}, socket) do
     {:noreply, assign(socket, answers: answers)}
   end
@@ -75,6 +93,34 @@ defmodule AperDeskWeb.PublicFormLive do
     }
   end
 
+  # The studio's own work, not a stock photograph. Their listing cover first,
+  # then anything in their portfolio; a placeholder when they have neither,
+  # which is better than a broken image on the page that collects their leads.
+  defp hero_for(studio_id) do
+    case Directory.list_portfolio(studio_id) do
+      [%{url: url} | _rest] when is_binary(url) ->
+        url
+
+      _none ->
+        case AperDesk.Repo.get_by(AperDesk.Directory.DirectoryListing, studio_id: studio_id) do
+          %{cover_url: url} when is_binary(url) -> url
+          _nothing -> nil
+        end
+    end
+  end
+
+  # The studio's own line about their work, not the form's title repeated over
+  # the photograph next to it.
+  defp caption_for(form) do
+    case AperDesk.Repo.get_by(AperDesk.Directory.DirectoryListing, studio_id: form.studio_id) do
+      %{headline: headline} when is_binary(headline) ->
+        if headline == form.headline, do: nil, else: headline
+
+      _none ->
+        nil
+    end
+  end
+
   ## Presentation
 
   def input_type("textarea"), do: "textarea"
@@ -97,4 +143,34 @@ defmodule AperDeskWeb.PublicFormLive do
 
   def value_for(answers, %{"key" => key}), do: Map.get(answers, key, "")
   def value_for(_answers, _field), do: ""
+
+  @doc """
+  Whether a choice field is short enough to be worth showing as chips.
+
+  Six is where a row of chips stops fitting and starts wrapping into a wall.
+  Above it the native picker wins — on a phone that is the OS wheel, which
+  beats anything built out of divs.
+  """
+  def chips?(field) do
+    input_type(field["type"]) == "select" and length(options_for(field)) in 2..6
+  end
+
+  @doc """
+  Whether a field belongs in the two-column band.
+
+  Names, emails, phone numbers and dates are short and read better side by
+  side; anything someone writes a paragraph into does not.
+  """
+  def narrow?(field) do
+    input_type(field["type"]) in ~w(text email tel date number) and not chips?(field)
+  end
+
+  @doc "Fields grouped into runs, so the short ones can share a row."
+  def field_rows(fields) do
+    fields
+    |> Enum.chunk_by(&narrow?/1)
+    |> Enum.map(fn group ->
+      if narrow?(hd(group)), do: {:narrow, group}, else: {:wide, group}
+    end)
+  end
 end

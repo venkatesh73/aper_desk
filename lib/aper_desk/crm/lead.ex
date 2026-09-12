@@ -15,7 +15,7 @@ defmodule AperDesk.Crm.Lead do
   @stages ~w(new contacted consult quote_sent booked completed lost)
   @open_stages ~w(new contacted consult quote_sent)
   @shoot_types ~w(wedding portrait newborn family engagement event commercial product real_estate other)
-  @sources ~w(manual email form referral directory google instagram whatsapp phone import other)
+  @sources ~w(manual email form booking referral directory google instagram whatsapp phone import other)
 
   schema "leads" do
     belongs_to :studio, Studio
@@ -53,6 +53,10 @@ defmodule AperDesk.Crm.Lead do
     field :lost_at, :utc_datetime_usec
     field :archived_at, :utc_datetime_usec
 
+    # What the client wrote in their own words. Distinct from `custom_fields`,
+    # which is the studio's own defined schema and drops anything undefined.
+    field :notes, :string
+
     field :custom_fields, :map, default: %{}
 
     timestamps()
@@ -86,6 +90,7 @@ defmodule AperDesk.Crm.Lead do
       :estimated_value_currency,
       :source,
       :source_detail,
+      :notes,
       :custom_fields
     ])
     |> validate_required([:studio_id, :title])
