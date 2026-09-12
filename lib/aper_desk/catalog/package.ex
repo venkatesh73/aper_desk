@@ -108,20 +108,83 @@ defmodule AperDesk.Catalog.PackageItem do
 end
 
 defmodule AperDesk.Catalog.PackageMedia do
-  @moduledoc "A sample image shown with a package."
+  @moduledoc """
+  A piece of sample work shown with a package.
+
+  Stills and video are held to different size limits — 5 MB and 10 MB — because
+  they are different things: a photograph over 5 MB is an unprocessed export
+  nobody wants to download on a phone, while ten seconds of usable video cannot
+  fit in that at all.
+
+  The limits are checked here as well as in the browser and in the upload
+  socket. The browser's check is a convenience the client controls, and
+  LiveView's is per upload rather than per file kind — this is the one that
+  runs against the bytes actually on disk, so it is the one that decides.
+  """
   use AperDesk.Schema
+
+  @kinds ~w(image video)
+
+  @max_bytes %{"image" => 5 * 1_048_576, "video" => 10 * 1_048_576}
 
   schema "package_media" do
     belongs_to :package, AperDesk.Catalog.Package
+    belongs_to :studio, AperDesk.Accounts.Studio
+
+    field :kind, :string, default: "image"
     field :storage_key, :string
     field :url, :string
     field :alt, :string
+    field :filename, :string
+    field :content_type, :string
+    field :byte_size, :integer, default: 0
     field :position, :integer, default: 0
   end
 
+  def kinds, do: @kinds
+
+  @doc "The cap for one file of this kind, in bytes."
+  def max_bytes(kind), do: Map.get(@max_bytes, kind, @max_bytes["image"])
+
+  @doc "The cap as a person would say it: `5 MB`."
+  def max_label(kind), do: "#{div(max_bytes(kind), 1_048_576)} MB"
+
   def changeset(media, attrs) do
     media
-    |> cast(attrs, [:storage_key, :url, :alt, :position])
-    |> validate_required([:storage_key])
+    |> cast(attrs, [
+      :package_id,
+      :studio_id,
+      :kind,
+      :storage_key,
+      :url,
+      :alt,
+      :filename,
+      :content_type,
+      :byte_size,
+      :position
+    ])
+    |> validate_required([:studio_id, :storage_key, :kind])
+    |> validate_inclusion(:kind, @kinds)
+    |> validate_number(:byte_size, greater_than: 0)
+    |> validate_size()
+    |> foreign_key_constraint(:package_id)
   end
+
+  defp validate_size(changeset) do
+    kind = get_field(changeset, :kind)
+    size = get_field(changeset, :byte_size)
+
+    if is_integer(size) and kind in @kinds and size > max_bytes(kind) do
+      add_error(
+        changeset,
+        :byte_size,
+        "is larger than #{max_label(kind)} — the limit for #{plural(kind)}"
+      )
+    else
+      changeset
+    end
+  end
+
+  defp plural("video"), do: "video"
+  defp plural(_image), do: "images"
 end

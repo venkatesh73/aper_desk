@@ -194,6 +194,112 @@
               <a class="btn ghost" href={~p"/app/packages"}>Cancel</a>
             </.form_actions>
           </.form>
+
+          <%= if @live_action == :edit do %>
+            <div class="sect" style="margin-top:18px">
+              <div class="sect-head with-action">
+                <h3>Sample work</h3>
+                <span class="spacer"></span>
+                <span style="font-size:12px;color:var(--faint)">
+                  {length(@package.media)} of {media_limit()} · images to {max_label("image")}, video to {max_label(
+                    "video"
+                  )}
+                </span>
+              </div>
+
+              <form
+                id="package-media-form"
+                phx-submit="upload-media"
+                phx-change="validate-media"
+                class="gtool"
+                style="border:1px solid var(--line);border-radius:var(--r-sm);border-bottom:1px solid var(--line)"
+              >
+                <label style="font-size:12.5px;color:var(--muted)">Images</label>
+                <.live_file_input upload={@uploads.images} />
+                <label style="font-size:12.5px;color:var(--muted)">Video</label>
+                <.live_file_input upload={@uploads.videos} />
+                <span class="spacer"></span>
+                <button
+                  class="btn sm primary"
+                  type="submit"
+                  disabled={@uploads.images.entries == [] and @uploads.videos.entries == []}
+                >
+                  Upload
+                </button>
+              </form>
+
+              <div
+                :for={{upload, kind} <- [{@uploads.images, "image"}, {@uploads.videos, "video"}]}
+                :if={upload.entries != [] or upload_errors(upload) != []}
+                class="list"
+              >
+                <div :for={entry <- upload.entries} class="it">
+                  <span style="flex:1;min-width:0">
+                    <b>{entry.client_name}</b>
+                    <span class="sub">
+                      {size(entry.client_size)}
+                      <%= for error <- upload_errors(upload, entry) do %>
+                        · <span class="bad-text">{upload_error(error, kind)}</span>
+                      <% end %>
+                    </span>
+                  </span>
+                  <span class="t">{entry.progress}%</span>
+                  <button
+                    type="button"
+                    class="btn sm ghost"
+                    phx-click="cancel-upload"
+                    phx-value-ref={entry.ref}
+                    phx-value-upload={if kind == "video", do: "videos", else: "images"}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div :for={error <- upload_errors(upload)} class="it">
+                  <span class="dot bad"></span>
+                  <span class="bad-text">{upload_error(error, kind)}</span>
+                </div>
+              </div>
+
+              <div :if={@package.media != []} class="thumbs" style="padding:10px 0">
+                <div :for={media <- @package.media} class="th" title={media.filename}>
+                  <img
+                    :if={media.kind == "image"}
+                    src={media_url(media)}
+                    alt={media.alt}
+                    loading="lazy"
+                  />
+                  <video :if={media.kind == "video"} src={media_url(media)} muted playsinline />
+                  <span class="hb">{size(media.byte_size)}</span>
+                  <button
+                    type="button"
+                    class="btn icon ghost sm"
+                    style="position:absolute;right:4px;top:4px;background:var(--panel)"
+                    phx-click="remove-media"
+                    phx-value-id={media.id}
+                    data-confirm={"Remove #{media.filename || "this file"}?"}
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <p
+                :if={@package.media == []}
+                style="font-size:12.5px;color:var(--muted);margin:8px 0 0"
+              >
+                Nothing yet. Sample work is what the package sells with — it shows on the public
+                booking page and inside a quote.
+              </p>
+            </div>
+          <% else %>
+            <div class="hint" style="margin-top:18px">
+              <b>Sample work comes next</b>
+              <span style="display:block;margin-top:2px">
+                Create the package first, then add up to {media_limit()} images and videos to it.
+              </span>
+            </div>
+          <% end %>
         </div>
       <% end %>
     </div>

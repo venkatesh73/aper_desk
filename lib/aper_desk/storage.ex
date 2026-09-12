@@ -45,29 +45,77 @@ defmodule AperDesk.Storage do
   def gallery_prefix(studio_id, gallery_id),
     do: "studios/#{studio_id}/galleries/#{gallery_id}"
 
+  @doc "The prefix holding one package's sample work."
+  def package_prefix(studio_id, package_id),
+    do: "studios/#{studio_id}/packages/#{package_id}"
+
+  @image_extensions ~w(jpg jpeg png gif webp avif heic heif tif tiff)
+  # `m4v` is deliberately absent: the `mime` library has no type for it, and
+  # `allow_upload` refuses an extension it cannot map. It is a niche container
+  # anyway — mp4, mov and webm are what studios actually hand over.
+  @video_extensions ~w(mp4 mov webm)
+
   @doc """
   A fresh key for one upload, under its gallery's prefix.
+
+  See `key_in/2`; this is the gallery-shaped call, kept because it is what
+  every gallery upload already says.
+  """
+  def key_for(studio_id, gallery_id, filename),
+    do: key_in(gallery_prefix(studio_id, gallery_id), filename)
+
+  @doc """
+  A fresh key under `prefix`, keeping only a recognised extension.
 
   The extension is taken from the original name only after being checked
   against a short allowlist; anything else becomes `bin`. An extension is a
   hint to a webserver about what to serve, so an unrecognised one is not worth
-  the risk of honouring.
+  the risk of honouring — and the rest of the name is discarded entirely, since
+  a browser will happily send `../../etc/passwd`.
   """
-  @extensions ~w(jpg jpeg png gif webp avif heic heif tif tiff mp4 mov)
-
-  def key_for(studio_id, gallery_id, filename) do
-    ext =
-      filename
-      |> Path.extname()
-      |> String.trim_leading(".")
-      |> String.downcase()
-      |> then(&if &1 in @extensions, do: &1, else: "bin")
-
-    "#{gallery_prefix(studio_id, gallery_id)}/#{Ecto.UUID.generate()}.#{ext}"
+  def key_in(prefix, filename) do
+    "#{prefix}/#{Ecto.UUID.generate()}.#{extension_of(filename)}"
   end
 
   @doc "The extensions a key may carry, for the upload control's accept list."
-  def extensions, do: @extensions
+  def extensions, do: @image_extensions ++ @video_extensions
+
+  @doc "Just the still-image extensions."
+  def image_extensions, do: @image_extensions
+
+  @doc "Just the moving-image extensions."
+  def video_extensions, do: @video_extensions
+
+  @doc """
+  Whether a file is a still or a moving image.
+
+  Decided from the content type first and the extension second. The content
+  type is what the browser claims and the extension is what the name claims;
+  neither is trustworthy on its own, but agreeing on "video" from either is
+  enough to hold the file to the video size limit, which is the larger one — so
+  a wrong answer here is never the one that lets an oversized file through.
+  """
+  def kind_of(content_type, filename \\ "")
+
+  def kind_of("image/" <> _, _filename), do: "image"
+  def kind_of("video/" <> _, _filename), do: "video"
+
+  def kind_of(_content_type, filename) do
+    case extension_of(filename) do
+      ext when ext in @image_extensions -> "image"
+      ext when ext in @video_extensions -> "video"
+      _ -> "other"
+    end
+  end
+
+  defp extension_of(filename) do
+    filename
+    |> to_string()
+    |> Path.extname()
+    |> String.trim_leading(".")
+    |> String.downcase()
+    |> then(&if &1 in (@image_extensions ++ @video_extensions), do: &1, else: "bin")
+  end
 
   @doc false
   def adapter, do: Keyword.fetch!(config(), :adapter)

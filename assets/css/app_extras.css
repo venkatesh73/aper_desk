@@ -275,3 +275,12 @@ input.invalid,select.invalid,textarea.invalid{border-color:var(--bad)}
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A video thumbnail has to fill its tile exactly as an image does; without
+   this it keeps its intrinsic aspect ratio and leaves a letterbox. */
+.th video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

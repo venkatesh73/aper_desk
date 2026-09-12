@@ -11,10 +11,11 @@ defmodule AperDesk.Catalog do
 
   alias AperDesk.Authorization
   alias AperDesk.Billing.Limits
-  alias AperDesk.Catalog.Package
+  alias AperDesk.Catalog.{Package, PackageMedia}
   alias AperDesk.Repo
   alias AperDesk.Scope
   alias AperDesk.Scoped
+  alias AperDesk.Storage
   alias Ecto.Multi
 
   def list_packages(%Scope{} = scope, opts \\ []) do
@@ -91,5 +92,79 @@ defmodule AperDesk.Catalog do
       |> Ecto.Changeset.change(archived_at: DateTime.utc_now())
       |> Repo.update()
     end
+  end
+
+  ## Sample work
+
+  @doc "How many pieces of sample work one package may carry."
+  @media_limit 12
+
+  def media_limit, do: @media_limit
+
+  @doc """
+  Attach a piece of sample work to a package.
+
+  The count check and the insert share a transaction, and the count is taken
+  under a lock on the package row. Two uploads finishing at the same moment
+  would otherwise both read eleven and both insert, which is how a "maximum of
+  twelve" quietly becomes thirteen.
+
+  Size is validated by `PackageMedia.changeset/2` against the bytes actually
+  written, not against what the browser claimed.
+  """
+  def add_media(%Scope{} = scope, package_id, attrs) do
+    with :ok <- Authorization.authorize(scope, :"package.write"),
+         {:ok, package} <- Scoped.fetch(Package, scope, package_id) do
+      Multi.new()
+      |> Multi.run(:lock, fn repo, _ ->
+        {:ok,
+         repo.one(from p in Package, where: p.id == ^package.id, lock: "FOR UPDATE", select: p.id)}
+      end)
+      |> Multi.run(:headroom, fn repo, _ ->
+        used = repo.aggregate(from(m in PackageMedia, where: m.package_id == ^package.id), :count)
+
+        if used < @media_limit,
+          do: {:ok, used},
+          else: {:error, {:media_limit, @media_limit}}
+      end)
+      |> Multi.insert(:media, fn %{headroom: used} ->
+        PackageMedia.changeset(
+          %PackageMedia{},
+          attrs
+          |> Scoped.put_studio(scope)
+          |> Map.put("package_id", package.id)
+          |> Map.put_new("position", used)
+        )
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{media: media}} -> {:ok, media}
+        {:error, _step, reason, _changes} -> {:error, reason}
+      end
+    end
+  end
+
+  @doc """
+  Detach a piece of sample work and delete the file behind it.
+
+  The row goes first, for the same reason it does in `Galleries.remove_media/2`:
+  an orphaned object costs disk until a sweep finds it, while a row pointing at
+  a file that is already gone is a broken image on the studio's own shopfront.
+  """
+  def remove_media(%Scope{} = scope, media_id) do
+    with :ok <- Authorization.authorize(scope, :"package.write"),
+         {:ok, media} <- Scoped.fetch(PackageMedia, scope, media_id),
+         {:ok, media} <- Repo.delete(media) do
+      if media.storage_key, do: Storage.delete(media.storage_key)
+      {:ok, media}
+    end
+  end
+
+  def list_media(%Scope{} = scope, package_id) do
+    PackageMedia
+    |> Scoped.for_studio(scope)
+    |> where([m], m.package_id == ^package_id)
+    |> order_by([m], asc: m.position, asc: m.filename)
+    |> Repo.all()
   end
 end
