@@ -45,32 +45,13 @@ defmodule AperDesk.Comms.EmailTemplate do
   @doc """
   Render a template against `assigns`, substituting `{{token}}` placeholders.
 
-  Unknown tokens are left as-is rather than blanked: a client receiving
-  "Hi {{first_name}}" is embarrassing, but a silent empty string reads as a
-  half-written message and is harder to notice in a test send.
+  The substitution itself is `AperDesk.Templating.interpolate/2`, shared with
+  contract templates so the two cannot drift.
   """
   def render(%__MODULE__{} = template, assigns) when is_map(assigns) do
-    %{subject: interpolate(template.subject, assigns), body: interpolate(template.body, assigns)}
-  end
-
-  defp interpolate(nil, _assigns), do: nil
-
-  defp interpolate(text, assigns) do
-    Regex.replace(~r/\{\{\s*([a-z0-9_.]+)\s*\}\}/i, text, fn full, key ->
-      case fetch_token(assigns, key) do
-        {:ok, value} -> to_string(value)
-        :error -> full
-      end
-    end)
-  end
-
-  defp fetch_token(assigns, key) do
-    case Map.fetch(assigns, key) do
-      {:ok, value} -> {:ok, value}
-      :error -> Map.fetch(assigns, String.to_existing_atom(key))
-    end
-  rescue
-    # An unknown token must not create an atom from user-supplied template text.
-    ArgumentError -> :error
+    %{
+      subject: AperDesk.Templating.interpolate(template.subject, assigns),
+      body: AperDesk.Templating.interpolate(template.body, assigns)
+    }
   end
 end

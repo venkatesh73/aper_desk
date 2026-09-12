@@ -30,7 +30,7 @@ defmodule AperDeskWeb.PackagesLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(show_archived: false)
+     |> assign(show_archived: false, preview: nil)
      |> allow_upload(:images,
        accept: Enum.map(Storage.image_extensions(), &".#{&1}"),
        max_entries: Catalog.media_limit(),
@@ -157,10 +157,17 @@ defmodule AperDeskWeb.PackagesLive do
      |> flash_for(added, failed)}
   end
 
+  def handle_event("preview-media", %{"id" => id}, socket) do
+    {:noreply, assign(socket, preview: Enum.find(socket.assigns.package.media, &(&1.id == id)))}
+  end
+
+  def handle_event("close-preview", _params, socket), do: {:noreply, assign(socket, preview: nil)}
+
   def handle_event("remove-media", %{"id" => id}, socket) do
     case Catalog.remove_media(socket.assigns.current_scope, id) do
       {:ok, _media} ->
-        {:noreply, socket |> reload_package() |> put_flash(:info, "Removed.")}
+        {:noreply,
+         socket |> assign(preview: nil) |> reload_package() |> put_flash(:info, "Removed.")}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Could not remove it: #{inspect(reason)}")}

@@ -114,8 +114,10 @@
           <div :if={@visible != []} class="thumbs">
             <div
               :for={media <- @visible}
-              class={["th", media.id == @gallery.cover_media_id && "cover"]}
+              class={["th", "openable", media.id == @gallery.cover_media_id && "cover"]}
               title={media.filename}
+              phx-click="preview-media"
+              phx-value-id={media.id}
             >
               <img src={thumb_url(media)} alt={media.filename} loading="lazy" />
               <span :if={media.favourite_count > 0} class="hb">♥ {media.favourite_count}</span>
@@ -147,6 +149,47 @@
               <option :for={media <- @visible} value={media.id}>{media.filename}</option>
             </select>
           </div>
+
+          <.modal
+            :if={@preview}
+            id="gallery-preview"
+            title={@preview.filename}
+            subtitle={"#{size(@preview.byte_size)}#{if @preview.favourite_count > 0, do: " · ♥ #{@preview.favourite_count}"}"}
+          >
+            <:actions>
+              <button
+                :if={@preview.id != @gallery.cover_media_id}
+                type="button"
+                class="btn sm"
+                phx-click={JS.push("cover", value: %{id: @preview.id})}
+              >
+                Make it the cover
+              </button>
+              <button
+                type="button"
+                class="btn sm ghost"
+                phx-click={JS.push("remove", value: %{id: @preview.id})}
+                data-confirm={"Remove #{@preview.filename}?"}
+              >
+                Remove
+              </button>
+            </:actions>
+
+            <video
+              :if={video?(@preview)}
+              class="media-preview"
+              src={preview_url(@preview)}
+              controls
+              autoplay
+              playsinline
+            />
+            <img
+              :if={not video?(@preview)}
+              class="media-preview"
+              src={preview_url(@preview)}
+              alt={@preview.filename}
+            />
+          </.modal>
 
           <.empty
             :if={@visible == [] and @media == []}

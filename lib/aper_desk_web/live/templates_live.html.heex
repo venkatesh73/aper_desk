@@ -54,6 +54,14 @@
                     <td>{humanise(template.shoot_type)}</td>
                     <td class="mono">{template.key}</td>
                     <td style="text-align:right">
+                      <button
+                        class="btn sm"
+                        phx-click="preview"
+                        phx-value-kind="email"
+                        phx-value-id={template.id}
+                      >
+                        Preview
+                      </button>
                       <a class="btn sm" href={~p"/app/templates/email/#{template}/edit"}>Edit</a>
                       <button
                         class="btn sm ghost"
@@ -91,6 +99,14 @@
                     <td>{humanise(template.shoot_type)}</td>
                     <td>{if template.requires_deposit, do: "Required", else: "Not required"}</td>
                     <td style="text-align:right">
+                      <button
+                        class="btn sm"
+                        phx-click="preview"
+                        phx-value-kind="contract"
+                        phx-value-id={template.id}
+                      >
+                        Preview
+                      </button>
                       <a class="btn sm" href={~p"/app/templates/contract/#{template}/edit"}>
                         Edit
                       </a>
@@ -135,6 +151,14 @@
                     <td>{length(AperDesk.Comms.LeadCaptureForm.field_list(form))}</td>
                     <td>{form.submission_count}</td>
                     <td style="text-align:right">
+                      <button
+                        class="btn sm"
+                        phx-click="preview"
+                        phx-value-kind="questionnaire"
+                        phx-value-id={form.id}
+                      >
+                        Preview
+                      </button>
                       <a class="btn sm" href={~p"/app/templates/questionnaire/#{form}/edit"}>
                         Edit
                       </a>
@@ -240,11 +264,97 @@
               <button type="submit" class="btn primary">
                 {if @record, do: "Save changes", else: "Create"}
               </button>
+              <button type="button" class="btn" phx-click="preview-draft">
+                Preview
+              </button>
               <a class="btn ghost" href={~p"/app/templates?tab=#{@kind}"}>Cancel</a>
             </.form_actions>
           </.form>
         </div>
       <% end %>
+
+      <.modal
+        :if={@preview}
+        id="template-preview"
+        title={@preview.title}
+        subtitle="Shown with sample details, so you can read it the way the client will."
+      >
+        <%= case @preview.kind do %>
+          <% "email" -> %>
+            <div class="mailprev">
+              <div class="mailprev-head">
+                <div class="kv">
+                  <span>From</span>
+                  <span>{@preview.from}</span>
+                  <span>To</span>
+                  <span>{@preview.to}</span>
+                  <span>Subject</span>
+                  <span><b>{@preview.subject}</b></span>
+                </div>
+              </div>
+              <div class="mailprev-body">{@preview.body}</div>
+            </div>
+          <% "contract" -> %>
+            <div class="docprev">
+              <h2>{@preview.title}</h2>
+              <p class="docprev-meta">
+                Between <b>{@preview.studio}</b> and <b>{@preview.client}</b>
+              </p>
+              <div class="docprev-body">{@preview.body}</div>
+              <div :if={@preview.requires_deposit} class="hint">
+                <b>A deposit of {@preview.deposit} is taken at signature</b>
+                <span style="display:block;margin-top:2px">
+                  The date is not held until it clears.
+                </span>
+              </div>
+              <div class="docprev-sign">
+                <span>Signed</span>
+                <span>Date</span>
+              </div>
+            </div>
+          <% _questionnaire -> %>
+            <div class="formprev">
+              <h2 :if={@preview.headline}>{@preview.headline}</h2>
+              <p :if={@preview.intro} class="docprev-meta">{@preview.intro}</p>
+
+              <div :if={@preview.fields != []} class="form">
+                <.field :for={field <- @preview.fields} label={field["label"]}>
+                  <%= case input_type(field["type"]) do %>
+                    <% "textarea" -> %>
+                      <textarea rows="3" disabled placeholder={field["placeholder"]}></textarea>
+                    <% "select" -> %>
+                      <select disabled>
+                        <option>Choose one</option>
+                        <option :for={option <- field_options(field)}>{option}</option>
+                      </select>
+                    <% "checkbox" -> %>
+                      <label class="checkfield">
+                        <input type="checkbox" disabled />
+                        <span>{field["label"]}</span>
+                      </label>
+                    <% type -> %>
+                      <input type={type} disabled placeholder={field["placeholder"]} />
+                  <% end %>
+                  <span :if={field["required"] in [true, "true"]} class="hint-line">
+                    Required
+                  </span>
+                </.field>
+
+                <button class="btn primary" disabled>Send it</button>
+              </div>
+
+              <p :if={@preview.fields == []} style="color:var(--muted)">
+                No questions yet. A questionnaire with no fields collects nothing but an email
+                address.
+              </p>
+
+              <div :if={@preview.success_message} class="hint">
+                <b>After they send it they see</b>
+                <span style="display:block;margin-top:2px">{@preview.success_message}</span>
+              </div>
+            </div>
+        <% end %>
+      </.modal>
     </div>
   </div>
 </Layouts.app>

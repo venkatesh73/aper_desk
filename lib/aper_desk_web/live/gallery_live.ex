@@ -35,6 +35,7 @@ defmodule AperDeskWeb.GalleryLive do
          socket
          |> assign(page_title: gallery.title)
          |> assign(gallery: gallery, album: nil, filter: "all", share_token: nil)
+         |> assign(preview: nil)
          |> allow_upload(:photos,
            accept: Enum.map(Storage.extensions(), &".#{&1}"),
            max_entries: @max_entries,
@@ -89,6 +90,7 @@ defmodule AperDeskWeb.GalleryLive do
       {:ok, media} ->
         {:noreply,
          socket
+         |> assign(preview: nil)
          |> put_flash(:info, "#{media.filename} removed.")
          |> reload_gallery()
          |> load()}
@@ -97,6 +99,12 @@ defmodule AperDeskWeb.GalleryLive do
         {:noreply, put_flash(socket, :error, "Could not remove it: #{inspect(reason)}")}
     end
   end
+
+  def handle_event("preview-media", %{"id" => id}, socket) do
+    {:noreply, assign(socket, preview: Enum.find(socket.assigns.media, &(&1.id == id)))}
+  end
+
+  def handle_event("close-preview", _params, socket), do: {:noreply, assign(socket, preview: nil)}
 
   def handle_event("cover", %{"id" => id}, socket) do
     case Galleries.update_gallery(socket.assigns.current_scope, socket.assigns.gallery.id, %{
@@ -352,6 +360,19 @@ defmodule AperDeskWeb.GalleryLive do
 
   @doc "The URL a thumbnail is served from — the derivative if there is one."
   def thumb_url(media), do: Storage.url(media.thumb_key || media.storage_key)
+
+  @doc """
+  The URL a preview is served from — the full frame, not the thumbnail.
+
+  A preview exists to show the photograph properly, so it deliberately skips
+  `thumb_key`: opening a 200px crop at full size would answer the question
+  worse than the grid already does.
+  """
+  def preview_url(media), do: Storage.url(media.preview_key || media.storage_key)
+
+  @doc "Whether this file plays rather than renders."
+  def video?(%{content_type: "video/" <> _}), do: true
+  def video?(_media), do: false
 
   @doc "The client-facing address of a share link, shown once with its token."
   def share_url(token), do: url(~p"/g/#{token}")

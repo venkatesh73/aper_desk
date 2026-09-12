@@ -95,6 +95,15 @@ defmodule AperDesk.Sales.ContractTemplate do
     |> cast(attrs, [:studio_id, :name, :shoot_type, :body, :requires_deposit])
     |> validate_required([:studio_id, :name, :body])
   end
+
+  @doc """
+  The body with its placeholders filled in.
+
+  The same substitution an email template uses — a studio should not have to
+  learn two token syntaxes for two documents it writes in the same afternoon.
+  """
+  def render(%__MODULE__{} = template, assigns) when is_map(assigns),
+    do: AperDesk.Templating.interpolate(template.body, assigns)
 end
 
 defmodule AperDesk.Sales.Signature do

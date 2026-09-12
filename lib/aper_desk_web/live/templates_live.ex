@@ -22,11 +22,13 @@ defmodule AperDeskWeb.TemplatesLive do
   alias AperDesk.Crm.Lead
   alias AperDesk.Sales
   alias AperDesk.Sales.ContractTemplate
+  alias AperDesk.Templating
 
   @tabs ~w(email contract questionnaire)
 
   @impl true
-  def mount(_params, _session, socket), do: {:ok, assign(socket, tab: "email")}
+  def mount(_params, _session, socket),
+    do: {:ok, assign(socket, tab: "email", preview: nil)}
 
   @impl true
   def handle_params(params, _uri, socket) do
@@ -112,6 +114,30 @@ defmodule AperDeskWeb.TemplatesLive do
     end
   end
 
+  @doc false
+  def handle_event("preview", %{"kind" => kind, "id" => id}, socket) when kind in @tabs do
+    case fetch(socket.assigns.current_scope, kind, id) do
+      {:ok, record} -> {:noreply, assign(socket, preview: preview(socket, kind, record))}
+      {:error, _reason} -> {:noreply, put_flash(socket, :error, "That template is not here.")}
+    end
+  end
+
+  # Previewing what is on the form, before it is saved. This is the one that
+  # earns its keep: the question a studio asks while writing is "does this read
+  # right", and answering it should not require saving a half-finished draft.
+  def handle_event("preview-draft", _params, socket) do
+    kind = socket.assigns.kind
+
+    record =
+      kind
+      |> changeset(socket.assigns.record, socket.assigns.form.params)
+      |> Ecto.Changeset.apply_changes()
+
+    {:noreply, assign(socket, preview: preview(socket, kind, record))}
+  end
+
+  def handle_event("close-preview", _params, socket), do: {:noreply, assign(socket, preview: nil)}
+
   def handle_event("archive", %{"kind" => kind, "id" => id}, socket) when kind in @tabs do
     scope = socket.assigns.current_scope
 
@@ -167,6 +193,51 @@ defmodule AperDeskWeb.TemplatesLive do
 
   defp blank_form(kind), do: to_form(changeset(kind, nil), as: :template)
 
+  ## Preview
+
+  # Rendered against sample values rather than blanks. A preview full of empty
+  # strings shows a layout the studio never actually sends — the gaps close up
+  # and the message reads shorter than it will — and one left as literal
+  # `{{first_name}}` does not answer the question either.
+  defp preview(socket, "email", %EmailTemplate{} = template) do
+    assigns = Templating.sample_assigns(socket.assigns.current_scope)
+    rendered = EmailTemplate.render(template, assigns)
+
+    %{
+      kind: "email",
+      title: template.name || "Untitled template",
+      subject: rendered.subject,
+      body: rendered.body,
+      to: assigns["name"] <> " <" <> assigns["email"] <> ">",
+      from: assigns["studio_name"]
+    }
+  end
+
+  defp preview(socket, "contract", %ContractTemplate{} = template) do
+    assigns = Templating.sample_assigns(socket.assigns.current_scope)
+
+    %{
+      kind: "contract",
+      title: template.name || "Untitled contract",
+      body: ContractTemplate.render(template, assigns),
+      requires_deposit: template.requires_deposit,
+      client: assigns["name"],
+      studio: assigns["studio_name"],
+      deposit: assigns["deposit"]
+    }
+  end
+
+  defp preview(_socket, "questionnaire", %LeadCaptureForm{} = form) do
+    %{
+      kind: "questionnaire",
+      title: form.name || "Untitled questionnaire",
+      headline: form.headline,
+      intro: form.intro,
+      fields: LeadCaptureForm.field_list(form),
+      success_message: form.success_message
+    }
+  end
+
   ## Presentation
 
   def tabs, do: @tabs
@@ -192,8 +263,25 @@ defmodule AperDeskWeb.TemplatesLive do
   can remember is a token nobody uses — and an unknown one renders as literal
   `{{whatever}}` in a client's inbox.
   """
-  def tokens,
-    do: ~w(first_name name email shoot_type shoot_date venue studio_name package_name total)
+  def tokens, do: Templating.tokens()
+
+  @doc "A questionnaire field's input type, mapped to what the browser calls it."
+  def input_type("textarea"), do: "textarea"
+  def input_type("email"), do: "email"
+  def input_type("phone"), do: "tel"
+  def input_type("date"), do: "date"
+  def input_type("number"), do: "number"
+  def input_type("checkbox"), do: "checkbox"
+  def input_type("select"), do: "select"
+  def input_type(_text), do: "text"
+
+  @doc "The choices a select field offers, however they were written."
+  def field_options(%{"options" => options}) when is_list(options), do: options
+
+  def field_options(%{"options" => options}) when is_binary(options),
+    do: options |> String.split(~r/[\n,]/) |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+
+  def field_options(_field), do: []
 
   def active?(%LeadCaptureForm{active: active}), do: active
   def active?(%{archived_at: nil}), do: true

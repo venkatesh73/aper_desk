@@ -152,7 +152,9 @@ defmodule AperDeskWeb.PackageMediaTest do
       path = Path.join("tmp/test_uploads", media.storage_key)
       assert File.exists?(path)
 
-      view |> element("button[phx-click='remove-media']") |> render_click()
+      # The button is inside the thumbnail, which itself opens the preview, so
+      # its click is a JS.push command rather than a bare event name.
+      view |> element("button[phx-click*='remove-media']") |> render_click()
 
       assert Catalog.list_media(scope, package.id) == []
       refute File.exists?(path)

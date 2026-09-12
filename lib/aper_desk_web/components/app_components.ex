@@ -267,4 +267,51 @@ defmodule AperDeskWeb.AppComponents do
   defp nav_icon(:cog),
     do:
       ~S(<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>)
+
+  @doc """
+  A panel over the page, for looking at one thing closely.
+
+  Closing is bound three ways — the backdrop, the button, and Escape — because
+  a reader who opens a preview by accident should not have to hunt for the way
+  out.
+
+  The backdrop is its own element *behind* the panel rather than a wrapper
+  around it. A wrapper is the obvious shape and it is wrong: a click inside the
+  panel bubbles up to the wrapper and closes the thing the reader was trying to
+  use, which is maddening and takes a while to attribute.
+
+  The caller owns the open/closed state and the close event; this only draws.
+  """
+  attr :id, :string, required: true
+  attr :title, :string, default: nil
+  attr :subtitle, :string, default: nil
+  attr :on_close, :string, default: "close-preview"
+  attr :size, :string, default: "wide", values: ~w(wide tall)
+  slot :inner_block, required: true
+  slot :actions
+
+  def modal(assigns) do
+    ~H"""
+    <div id={@id} class="modal-layer" phx-window-keydown={@on_close} phx-key="Escape">
+      <div class="modal-backdrop" phx-click={@on_close}></div>
+
+      <div class={["modal", @size]}>
+        <div class="modal-head">
+          <div style="min-width:0">
+            <h3>{@title}</h3>
+            <span :if={@subtitle} class="sub">{@subtitle}</span>
+          </div>
+          <span class="spacer"></span>
+          {render_slot(@actions)}
+          <button type="button" class="btn icon ghost sm" phx-click={@on_close} aria-label="Close">
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          {render_slot(@inner_block)}
+        </div>
+      </div>
+    </div>
+    """
+  end
 end

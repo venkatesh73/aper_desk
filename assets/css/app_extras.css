@@ -284,3 +284,110 @@ input.invalid,select.invalid,textarea.invalid{border-color:var(--bad)}
   object-fit: cover;
   display: block;
 }
+
+/* ===== preview modal =====
+   One panel over the page, used for looking at an uploaded file or at a
+   template rendered the way it will actually be sent. */
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+/* Behind the panel, not around it: a wrapper would swallow every click that
+   lands inside the panel and close it. */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 16, 12, .55);
+}
+.modal {
+  position: relative;
+  z-index: 1;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal.wide { max-width: 780px; }
+.modal.tall { max-width: 1100px; }
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line2);
+}
+.modal-head h3 {
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal-head .sub { font-size: 12.5px; color: var(--muted); display: block; }
+.modal-body { padding: 14px; overflow: auto; }
+
+/* A preview of one uploaded file: let it be as big as it can without
+   overflowing, and never stretch it past its own resolution. */
+.modal-body .media-preview {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: var(--r-sm);
+  background: var(--panel2);
+}
+
+/* A thumbnail that opens a preview has to say so. */
+.th.openable { cursor: zoom-in; }
+
+/* ===== template previews =====
+   Each kind is shown in the shape it is actually read in: an email as a
+   message, a contract as a document, a questionnaire as the form the client
+   fills in. A plain dump of the body would not answer the question. */
+.mailprev { border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+.mailprev-head { padding: 12px 14px; background: var(--panel2); border-bottom: 1px solid var(--line2); }
+.mailprev-body {
+  padding: 16px 14px;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.docprev { max-width: 640px; margin: 0 auto; }
+.docprev h2 { font-family: Fraunces, Georgia, serif; font-weight: 400; font-size: 24px; }
+.docprev-meta { color: var(--muted); font-size: 13px; margin: 4px 0 14px; }
+.docprev-body {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.7;
+  padding: 14px 0;
+  border-top: 1px solid var(--line2);
+  border-bottom: 1px solid var(--line2);
+  margin-bottom: 14px;
+}
+.docprev-sign {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 24px;
+  margin-top: 28px;
+}
+.docprev-sign span {
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.formprev { max-width: 520px; margin: 0 auto; }
+.formprev h2 { font-family: Fraunces, Georgia, serif; font-weight: 400; font-size: 22px; }
+.formprev .form { margin-top: 14px; }
+.hint-line { font-size: 11.5px; color: var(--faint); }
