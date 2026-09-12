@@ -21,7 +21,7 @@
     </div>
 
     <div :if={cover(@gallery, @media)} class="cg-hero">
-      <img src={photo_url(cover(@gallery, @media))} alt="" />
+      <img src={photo_url(@token, cover(@gallery, @media))} alt="" />
       <div class="cap">
         <h1>{@gallery.title}</h1>
         <div class="d">{@gallery.media_count} photographs</div>
@@ -37,7 +37,9 @@
         :for={media <- visible(@media, @filter, @favourites)}
         class={["mi", MapSet.member?(@favourites, media.id) && "fav"]}
       >
-        <img src={photo_url(media)} alt={media.filename} loading="lazy" />
+        <%!-- The grid gets thumbnails. It used to get the originals, which is
+        why a four-hundred-frame gallery took minutes to draw on a phone. --%>
+        <img src={thumb_url(@token, media)} alt={media.filename} loading="lazy" />
         <div class="act">
           <button class="hrt" phx-click="favourite" phx-value-id={media.id} title="Favourite">
             ♥

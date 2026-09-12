@@ -150,7 +150,7 @@ defmodule AperDeskWeb.GalleriesLive do
       |> Scoped.for_studio(scope)
       |> where([m], m.id in ^ids)
       |> Repo.all()
-      |> Map.new(&{&1.id, AperDesk.Storage.url(&1.thumb_key || &1.storage_key)})
+      |> Map.new(&{&1.id, ~p"/app/media/#{&1.id}/thumb"})
     end
   end
 

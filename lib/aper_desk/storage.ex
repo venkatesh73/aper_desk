@@ -44,10 +44,20 @@ defmodule AperDesk.Storage do
   @doc "A URL a browser can fetch the object from."
   @callback url(key) :: String.t()
 
+  @doc """
+  A URL that stops working.
+
+  Gallery objects are reached through this and never by their bucket path, so
+  a link the studio revoked cannot be fetched afterwards by anyone who kept the
+  image URL. `expires_in` is seconds.
+  """
+  @callback signed_url(key, expires_in :: pos_integer) :: {:ok, String.t()} | {:error, term}
+
   def put(key, source_path, opts \\ []), do: adapter().put(key, source_path, opts)
   def delete(key), do: adapter().delete(key)
   def delete_prefix(prefix), do: adapter().delete_prefix(prefix)
   def fetch(key, dest_path), do: adapter().fetch(key, dest_path)
+  def signed_url(key, expires_in \\ 300), do: adapter().signed_url(key, expires_in)
   def url(nil), do: nil
   def url(key), do: adapter().url(key)
 

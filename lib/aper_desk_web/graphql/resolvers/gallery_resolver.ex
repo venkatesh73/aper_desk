@@ -42,7 +42,10 @@ defmodule AperDeskWeb.Graphql.Resolvers.GalleryResolver do
            Enum.map(media, fn item ->
              %{
                id: item.id,
-               url: item.preview_key || item.thumb_key || item.storage_key,
+               # A storage key is not a URL, and this used to hand one to the
+               # mobile client as though it were. Now it is the same authorised
+               # route the web app fetches through.
+               url: AperDeskWeb.MediaController.studio_url(item.id, "preview"),
                favourite_count: Map.get(favourite_counts, item.id, 0),
                picked: Map.has_key?(favourite_counts, item.id),
                is_cover: gallery.cover_media_id == item.id

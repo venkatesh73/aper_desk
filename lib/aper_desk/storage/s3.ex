@@ -67,6 +67,12 @@ defmodule AperDesk.Storage.S3 do
   end
 
   @impl true
+  def signed_url(key, expires_in) do
+    ExAws.Config.new(:s3)
+    |> ExAws.S3.presigned_url(:get, bucket(), key, expires_in: expires_in)
+  end
+
+  @impl true
   def url(key), do: Path.join(public_base_url(), key)
 
   defp bucket, do: Keyword.fetch!(Storage.config(), :bucket)

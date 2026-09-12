@@ -359,7 +359,7 @@ defmodule AperDeskWeb.GalleryLive do
     do: "Live until #{Formats.date(scope, gallery.expires_at)}"
 
   @doc "The URL a thumbnail is served from — the derivative if there is one."
-  def thumb_url(media), do: Storage.url(media.thumb_key || media.storage_key)
+  def thumb_url(media), do: ~p"/app/media/#{media.id}/thumb"
 
   @doc """
   The URL a preview is served from — the full frame, not the thumbnail.
@@ -368,7 +368,7 @@ defmodule AperDeskWeb.GalleryLive do
   `thumb_key`: opening a 200px crop at full size would answer the question
   worse than the grid already does.
   """
-  def preview_url(media), do: Storage.url(media.preview_key || media.storage_key)
+  def preview_url(media), do: ~p"/app/media/#{media.id}/preview"
 
   @doc "Whether this file plays rather than renders."
   def video?(%{content_type: "video/" <> _}), do: true

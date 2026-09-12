@@ -124,6 +124,15 @@ if config_env() == :prod do
     ]
 
   # Galleries live in S3-compatible object storage (Cloudflare R2 by default).
+  #
+  # The bucket must be PRIVATE. Gallery files are reached only through
+  # `AperDeskWeb.MediaController`, which re-checks the share on every fetch and
+  # redirects to a URL that expires in five minutes. A publicly readable bucket
+  # puts every photograph back one guessed key away and makes revoking a share
+  # stop the page while the images keep serving.
+  #
+  # STORAGE_PUBLIC_BASE_URL is therefore only used for genuinely public assets
+  # — package sample work and directory portfolios — never for client galleries.
   config :aper_desk, :storage,
     adapter: AperDesk.Storage.S3,
     bucket: System.fetch_env!("STORAGE_BUCKET"),

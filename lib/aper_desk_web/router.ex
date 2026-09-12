@@ -56,6 +56,11 @@ defmodule AperDeskWeb.Router do
     # A LiveView cannot write the session, so a gallery that passed its code
     # check comes through here to have that recorded before going back.
     get "/g/:token/unlock", ClientGalleryController, :unlock
+
+    # Gallery files are never linked straight from the bucket. Each fetch
+    # re-checks the share, so revoking a link stops the photographs and not
+    # just the page.
+    get "/g/:token/media/:id/:variant", MediaController, :client
     live "/q/:token", ClientQuoteLive, :show
 
     # The form a studio embeds on its own site. Public by definition: the
@@ -77,6 +82,10 @@ defmodule AperDeskWeb.Router do
   # which is a separate process with only the session to go on.
   scope "/app", AperDeskWeb do
     pipe_through [:browser, :authenticated, :require_auth]
+
+    # The same door for the studio's own people, authorised by scope rather
+    # than by a share token.
+    get "/media/:id/:variant", MediaController, :studio
 
     # Its own session: the setup screen must not redirect to itself.
     live_session :setup, on_mount: {AperDeskWeb.LiveAuth, :require_scope_only} do

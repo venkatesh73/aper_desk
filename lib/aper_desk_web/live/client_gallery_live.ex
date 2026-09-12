@@ -41,10 +41,10 @@ defmodule AperDeskWeb.ClientGalleryLive do
           # client came back when they only arrived.
           connected?(socket) ->
             {:ok, gallery, share} = Galleries.open_shared_gallery(token)
-            {:ok, opened(socket, gallery, share)}
+            {:ok, opened(socket, token, gallery, share)}
 
           true ->
-            {:ok, opened(socket, gallery, share)}
+            {:ok, opened(socket, token, gallery, share)}
         end
 
       {:error, _reason} ->
@@ -57,10 +57,10 @@ defmodule AperDeskWeb.ClientGalleryLive do
     end
   end
 
-  defp opened(socket, gallery, share) do
+  defp opened(socket, token, gallery, share) do
     socket
     |> assign(page_title: gallery.title)
-    |> assign(gallery: gallery, share: share, filter: "all", stage: :open)
+    |> assign(gallery: gallery, share: share, token: token, filter: "all", stage: :open)
     |> assign(media: media(gallery))
     |> load_selections()
     |> assign(:page_layout, false)
@@ -171,7 +171,15 @@ defmodule AperDeskWeb.ClientGalleryLive do
 
   def visible(media, _filter, _favourites), do: media
 
-  def photo_url(media), do: AperDesk.Storage.url(media.preview_key || media.storage_key)
+  @doc """
+  Where the browser fetches a frame from.
+
+  Through the app rather than the bucket, so the share is re-checked on every
+  image. A link the studio revoked stops serving photographs, not just pages.
+  """
+  def photo_url(token, media), do: ~p"/g/#{token}/media/#{media.id}/preview"
+
+  def thumb_url(token, media), do: ~p"/g/#{token}/media/#{media.id}/thumb"
 
   def cover(gallery, media) do
     Enum.find(media, &(&1.id == gallery.cover_media_id)) || List.first(media)

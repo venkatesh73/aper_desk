@@ -51,6 +51,13 @@ defmodule AperDesk.Storage.Local do
     end
   end
 
+  # There is no signing to do against a local disk. The controller in front of
+  # it does the authorising, which is the part that matters; this adapter is
+  # for development and single-node boxes where the files are not reachable
+  # from anywhere else anyway.
+  @impl true
+  def signed_url(key, _expires_in), do: {:ok, url(key)}
+
   @impl true
   def url(key), do: Path.join(public_base_url(), key)
 

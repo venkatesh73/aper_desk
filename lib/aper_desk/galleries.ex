@@ -320,6 +320,30 @@ defmodule AperDesk.Galleries do
     end
   end
 
+  @doc """
+  Resolve one file behind a share link.
+
+  Every check the gallery page makes is made again here, because this is a
+  separate request and the link may have been revoked since the page was
+  drawn. A media id from another gallery is `:not_found` rather than
+  `:forbidden` — saying which would confirm the id exists.
+  """
+  def fetch_shared_media(token, media_id, unlocked \\ []) do
+    with {:ok, gallery, share} <- resolve_shared_gallery(token) do
+      if gated?(gallery, unlocked) do
+        {:error, :gated}
+      else
+        case Repo.get(GalleryMedia, media_id) do
+          %GalleryMedia{} = media when media.gallery_id == gallery.id ->
+            {:ok, media, gallery, share}
+
+          _other ->
+            {:error, :not_found}
+        end
+      end
+    end
+  end
+
   ## Client selections
 
   @doc """
