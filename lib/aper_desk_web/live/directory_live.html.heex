@@ -1,0 +1,178 @@
+<Layouts.flash_group flash={@flash} />
+
+<div class="land">
+  <nav class="cnav">
+    <a class="brand" href={~p"/"}>
+      <img src={~p"/images/logo-long.png"} alt="AperDesk" width="120" height="40" />
+    </a>
+    <a class="nl" href={~p"/photographers"} style="color:var(--text)">Find a photographer</a>
+    <span class="spacer"></span>
+    <a class="btn" href={~p"/sign-up"}>I'm a photographer</a>
+  </nav>
+
+  <%= if @live_action == :show do %>
+    <nav aria-label="Breadcrumb" style="padding:14px 0;font-size:12.5px;color:var(--faint)">
+      <a href={~p"/photographers"}>Photographers</a>
+      <span> › </span>
+      <a href={~p"/photographers/#{@city_slug}"}>{@listing.city}</a>
+      <span> › </span>
+      <span>{@listing.studio.name}</span>
+    </nav>
+
+    <div class="pf-head">
+      <div class={["photo", is_nil(@listing.cover_url) && "ph"]} style="width:64px;height:64px">
+        <img :if={@listing.cover_url} src={@listing.cover_url} alt="" />
+      </div>
+      <div style="min-width:0">
+        <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:30px">
+          {@listing.studio.name}
+        </h1>
+        <p style="color:var(--muted);margin:4px 0 0">
+          {@listing.headline || where(@listing)}
+        </p>
+        <div class="tags" style="margin-top:8px">
+          <span class="pill">{where(@listing)}</span>
+          <span :if={from_price(@listing)} class="pill">{from_price(@listing)}</span>
+          <span :if={rating(@listing)} class="pill ok">
+            ★ {rating(@listing)} · {@listing.rating_count} reviews
+          </span>
+          <span :if={reply_line(@listing)} class="pill">{reply_line(@listing)}</span>
+          <span :if={travel_line(@listing)} class="pill">{travel_line(@listing)}</span>
+        </div>
+      </div>
+    </div>
+
+    <div :if={@portfolio != []} class="gal" style="margin:20px 0">
+      <div :for={item <- Enum.take(@portfolio, 8)} class="photo">
+        <img
+          src={item.url}
+          alt={item.caption || item.title || "Work by #{@listing.studio.name}"}
+          loading="lazy"
+          width={item.width}
+          height={item.height}
+        />
+      </div>
+    </div>
+
+    <div class="split" style="padding-bottom:48px">
+      <div>
+        <div :if={@listing.bio} class="panel">
+          <div class="ph-head">
+            <h3>About</h3>
+          </div>
+          <p style="color:var(--muted);white-space:pre-wrap;margin:0">{@listing.bio}</p>
+        </div>
+
+        <div :if={@reviews != []} class="panel" style="margin-top:12px">
+          <div class="ph-head">
+            <h3>What couples said</h3>
+          </div>
+          <div :for={review <- @reviews} class="rev">
+            <div>
+              <b>{review.author_name}</b>
+              <span class="pill ok">★ {review.rating}</span>
+              <p style="color:var(--muted);margin:6px 0 0">{review.body}</p>
+              <p
+                :if={review.studio_reply}
+                style="color:var(--faint);margin:6px 0 0;font-size:12.5px"
+              >
+                {@listing.studio.name} replied: {review.studio_reply}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <.empty
+          :if={@reviews == [] and is_nil(@listing.bio)}
+          title="This studio is still filling in their profile"
+          body="You can still get in touch — enquiries reach them the same way."
+        />
+      </div>
+
+      <div class="panel">
+        <div class="ph-head">
+          <h3>Get in touch</h3>
+        </div>
+        <p style="color:var(--muted);font-size:13px">
+          Tell them the date and where, and they will come back to you.
+        </p>
+        <p :if={@listing.languages != []} style="color:var(--faint);font-size:12.5px">
+          Speaks {Enum.join(@listing.languages, ", ")}
+        </p>
+        <a class="btn primary" href={~p"/"} style="width:100%;justify-content:center">
+          Send an enquiry
+        </a>
+      </div>
+    </div>
+  <% else %>
+    <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:34px;margin-top:24px">
+      {if @city, do: "Photographers in #{@city.city}", else: "Find a photographer"}
+    </h1>
+    <p style="color:var(--muted);margin-top:6px">
+      {if @city,
+        do: "Compare their work, what they charge and how fast they reply.",
+        else: "Browse by city, or search for the studio you already have in mind."}
+    </p>
+
+    <form class="search" method="get" action={~p"/photographers"}>
+      <div class="field">
+        <label for="q">Who or what</label>
+        <input type="text" id="q" name="q" value={@query} placeholder="Documentary wedding" />
+      </div>
+      <div class="field">
+        <label for="city">Where</label>
+        <input type="text" id="city" name="city" placeholder="Lisbon" />
+      </div>
+      <button type="submit" class="btn primary">Search</button>
+    </form>
+
+    <div :if={@listings != []} class="results">
+      <a :for={listing <- @listings} class="pcard" href={profile_url(listing)}>
+        <div class={["cover", "photo", is_nil(listing.cover_url) && "ph"]}>
+          <img
+            :if={listing.cover_url}
+            src={listing.cover_url}
+            alt={"Work by #{listing.studio.name}"}
+            loading="lazy"
+          />
+          <span :if={listing.featured} class="tag">Featured</span>
+        </div>
+        <div class="body">
+          <div class="who">
+            <b>{listing.studio.name}</b>
+            <span class="spacer"></span>
+            <span :if={rating(listing)} class="pill ok">★ {rating(listing)}</span>
+          </div>
+          <span style="color:var(--muted);font-size:13px">
+            {listing.headline || where(listing)}
+          </span>
+          <span style="color:var(--faint);font-size:12.5px">
+            {where(listing)}{if from_price(listing), do: " · #{from_price(listing)}"}
+          </span>
+        </div>
+      </a>
+    </div>
+
+    <.empty
+      :if={@listings == []}
+      title="Nobody listed here yet"
+      body="Try another city, or browse everyone below."
+    />
+
+    <%!-- The crawler's route to every city page. A hub that links nowhere is
+    a hub no city page is ever found through. --%>
+    <div :if={@cities != []} style="padding:28px 0 48px">
+      <h2 style="font-size:15px;font-weight:700">Browse by city</h2>
+      <div class="chips" style="margin-top:10px">
+        <a :for={city <- @cities} class="chip" href={city_path(city)}>
+          {city.city}<span class="n" style="margin-left:6px">{city.count}</span>
+        </a>
+      </div>
+    </div>
+  <% end %>
+
+  <div class="cg-foot">
+    <span>AperDesk</span>
+    <a href={~p"/"}>For photographers</a>
+  </div>
+</div>

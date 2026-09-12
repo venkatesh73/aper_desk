@@ -1,5 +1,36 @@
-# See https://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
+# AperDesk
 #
-# To ban all spiders from the entire site uncomment the next two lines:
-# User-agent: *
-# Disallow: /
+# Two halves of the product want opposite things here. The marketing site and
+# the photographer directory are how studios and couples arrive, so they are
+# open. Everything reached by a share token is private work handed to one
+# client, and must never appear in a result — a gallery link in search is a
+# couple's wedding photographs handed to strangers.
+#
+# The pages also send `noindex` themselves. This file is the belt; the meta tag
+# is the braces. robots.txt stops the crawl, not the indexing: a URL that is
+# only disallowed here can still be listed from an inbound link, and only the
+# meta tag prevents that.
+
+User-agent: *
+
+# The signed-in application. Nothing here is useful to a searcher and all of it
+# needs a session.
+Disallow: /app/
+Disallow: /sign-in
+Disallow: /sign-up
+Disallow: /sign-out
+Disallow: /forgot-password
+Disallow: /reset-password/
+Disallow: /invitations/
+
+# Client links. One recipient each, private by intent.
+Disallow: /g/
+Disallow: /q/
+
+# A studio's embedded enquiry form is meant to be reached from the studio's own
+# site, not to compete with their pages in a result.
+Disallow: /f/
+
+Allow: /
+
+Sitemap: https://aperdesk.com/sitemap.xml

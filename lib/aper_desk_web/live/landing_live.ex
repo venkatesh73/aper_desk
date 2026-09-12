@@ -25,12 +25,24 @@ defmodule AperDeskWeb.LandingLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    socket =
+      socket
+      |> assign(period: :monthly, currency: "USD")
+      |> assign(plans: Billing.list_public_plans())
+      |> assign(currencies: offerable_currencies())
+
+    # The one marketing page, and one of only four things in the product that
+    # asks to be indexed.
     {:ok,
-     socket
-     |> assign(page_title: "The studio system for photographers")
-     |> assign(period: :monthly, currency: "USD")
-     |> assign(plans: Billing.list_public_plans())
-     |> assign(currencies: offerable_currencies())}
+     assign(
+       socket,
+       AperDeskWeb.SEO.index(
+         title: "The studio system for photographers",
+         description: AperDeskWeb.SEO.default_description(),
+         canonical: url(~p"/"),
+         schema: AperDeskWeb.SEO.software_schema(url(~p"/"))
+       )
+     )}
   end
 
   @doc """

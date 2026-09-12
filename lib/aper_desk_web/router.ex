@@ -58,6 +58,14 @@ defmodule AperDeskWeb.Router do
     # protection is that submissions are validated against the form's own field
     # definitions and unknown keys are dropped.
     live "/f/:studio/:form", PublicFormLive, :show
+
+    # The consumer half. These are the only pages in the product built to be
+    # found by a stranger, so they are the only ones that opt into indexing.
+    live "/photographers", DirectoryLive, :index
+    live "/photographers/:city", DirectoryLive, :city
+    live "/photographers/:city/:slug", DirectoryLive, :show
+
+    get "/sitemap.xml", SitemapController, :index
   end
 
   # The signed-in application. RequireAuth guards the HTTP request that renders

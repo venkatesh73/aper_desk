@@ -63,7 +63,70 @@ defmodule AperDesk.Directory do
     |> filter_listings(opts)
     |> order_by([l], desc: l.featured, desc: l.rating_avg, desc: l.rating_count)
     |> limit(^Keyword.get(opts, :limit, 25))
+    |> preload(:studio)
     |> Repo.all()
+  end
+
+  @doc """
+  One studio's public profile, by its slug.
+
+  Published only. An unpublished listing reached by URL must be a 404 rather
+  than a preview — a studio that pulled its listing has not agreed to be
+  findable, and a page that answers 200 stays in the index.
+  """
+  def fetch_published(slug) when is_binary(slug) do
+    query =
+      from l in DirectoryListing,
+        join: s in AperDesk.Accounts.Studio,
+        on: s.id == l.studio_id,
+        where: s.slug == ^slug and not is_nil(l.published_at),
+        preload: [studio: s]
+
+    case Repo.one(query) do
+      nil -> {:error, :not_found}
+      listing -> {:ok, listing}
+    end
+  end
+
+  @doc """
+  Every city with a published listing, and how many.
+
+  This is what the directory's landing pages are built from, and what the
+  sitemap enumerates: one page per city is the difference between ranking for
+  "photographer" — which nobody wins — and ranking for "wedding photographer
+  in Lisbon", which somebody searches for with intent to book.
+
+  Cities with no listings are excluded, because a page promising
+  photographers and showing none is worse for a searcher than no page.
+  """
+  def list_cities do
+    Repo.all(
+      from l in DirectoryListing,
+        where: not is_nil(l.published_at) and not is_nil(l.city),
+        group_by: [l.city, l.country_code],
+        order_by: [desc: count(l.id), asc: l.city],
+        select: %{city: l.city, country_code: l.country_code, count: count(l.id)}
+    )
+  end
+
+  @doc "A URL-safe form of a city name, and the way back to matching listings."
+  def city_slug(city) do
+    city
+    |> to_string()
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/u, "-")
+    |> String.trim("-")
+  end
+
+  @doc """
+  Find a city by its slug.
+
+  Compared on the slug rather than the name so that "sao-paulo" reaches
+  "São Paulo" — a URL cannot carry the accent, and a city page nobody can
+  reach from a clean URL is a city page nobody links to.
+  """
+  def find_city(slug) do
+    Enum.find(list_cities(), &(city_slug(&1.city) == slug))
   end
 
   @doc "Listings within `radius_km` of a point, nearest first."
@@ -194,9 +257,14 @@ defmodule AperDesk.Directory do
   defp ensure_completed(%Job{status: status}) when status in ~w(shot delivered), do: :ok
   defp ensure_completed(%Job{status: status}), do: {:error, {:job_not_completed, status}}
 
+  # A slug back to something a `lower(city)` comparison can match. Exact rather
+  # than fuzzy: "porto" must not also match "Porto Alegre".
+  defp slug_to_like(slug), do: slug |> String.replace("-", " ") |> String.downcase()
+
   defp filter_listings(query, opts) do
     Enum.reduce(opts, query, fn
       {:city, city}, q -> where(q, [l], ilike(l.city, ^city))
+      {:city_slug, slug}, q -> where(q, [l], fragment("lower(?)", l.city) == ^slug_to_like(slug))
       {:country_code, code}, q -> where(q, [l], l.country_code == ^code)
       {:query, term}, q -> where(q, [l], ilike(l.headline, ^"%#{term}%"))
       {:max_price_cents, max}, q -> where(q, [l], l.from_price_cents <= ^max)

@@ -25,10 +25,47 @@
     <link rel="apple-touch-icon" href={~p"/images/favicon_io/apple-touch-icon.png"} />
     <link rel="manifest" href={~p"/images/favicon_io/site.webmanifest"} />
     <meta name="theme-color" content="#B8722E" />
+
+    <%!-- Default noindex, and pages opt in. A page added by somebody not
+    thinking about crawlers is then private by accident rather than public by
+    accident, and only one of those is recoverable — a /g/<token> in a search
+    result is a couple's wedding photographs handed to strangers. --%>
+    <meta name="robots" content={AperDeskWeb.SEO.robots(assigns)} />
     <meta
       name="description"
-      content="Capture leads, protect dates, deliver galleries and pay the crew. One place, five roles, no spreadsheet."
+      content={assigns[:seo_description] || AperDeskWeb.SEO.default_description()}
     />
+    <link :if={assigns[:seo_canonical]} rel="canonical" href={@seo_canonical} />
+
+    <meta property="og:site_name" content={AperDeskWeb.SEO.site_name()} />
+    <meta property="og:type" content={assigns[:seo_type] || "website"} />
+    <meta property="og:title" content={assigns[:page_title] || AperDeskWeb.SEO.default_title()} />
+    <meta
+      property="og:description"
+      content={assigns[:seo_description] || AperDeskWeb.SEO.default_description()}
+    />
+    <meta :if={assigns[:seo_canonical]} property="og:url" content={@seo_canonical} />
+    <meta :if={assigns[:seo_image]} property="og:image" content={@seo_image} />
+
+    <%!-- summary_large_image only when there is an image to fill it; the
+    narrow card degrades better than a wide one with a blank space. --%>
+    <meta
+      name="twitter:card"
+      content={if assigns[:seo_image], do: "summary_large_image", else: "summary"}
+    />
+    <meta name="twitter:title" content={assigns[:page_title] || AperDeskWeb.SEO.default_title()} />
+    <meta
+      name="twitter:description"
+      content={assigns[:seo_description] || AperDeskWeb.SEO.default_description()}
+    />
+    <meta :if={assigns[:seo_image]} name="twitter:image" content={@seo_image} />
+
+    <%!-- `<%= %>`, not `{}`: heex does not interpolate inside a script tag, so
+    the curly form ships the literal source and every crawler gets invalid
+    JSON-LD. --%>
+    <script :if={assigns[:seo_schema]} type="application/ld+json">
+      <%= Phoenix.HTML.raw(Jason.encode!(@seo_schema)) %>
+    </script>
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
