@@ -36,8 +36,11 @@ defmodule AperDesk.Comms do
 
   ## Mailboxes
 
-  def list_accounts(%Scope{} = scope),
-    do: EmailAccount |> Scoped.for_studio(scope) |> Repo.all()
+  def list_accounts(%Scope{} = scope) do
+    with :ok <- Authorization.authorize(scope, :"comms.read") do
+      EmailAccount |> Scoped.for_studio(scope) |> Repo.all()
+    end
+  end
 
   def connect_account(%Scope{} = scope, attrs) do
     with :ok <- Authorization.authorize(scope, :"comms.write") do
@@ -138,13 +141,15 @@ defmodule AperDesk.Comms do
 
   ## Templates
 
-  def list_templates(%Scope{} = scope),
-    do:
+  def list_templates(%Scope{} = scope) do
+    with :ok <- Authorization.authorize(scope, :"comms.read") do
       EmailTemplate
       |> Scoped.for_studio(scope)
       |> where([t], is_nil(t.archived_at))
       |> order_by([t], asc: t.name)
       |> Repo.all()
+    end
+  end
 
   def create_template(%Scope{} = scope, attrs) do
     with :ok <- Authorization.authorize(scope, :"comms.write") do
@@ -279,8 +284,11 @@ defmodule AperDesk.Comms do
 
   ## Capture forms
 
-  def list_forms(%Scope{} = scope),
-    do: LeadCaptureForm |> Scoped.for_studio(scope) |> order_by([f], asc: f.name) |> Repo.all()
+  def list_forms(%Scope{} = scope) do
+    with :ok <- Authorization.authorize(scope, :"comms.read") do
+      LeadCaptureForm |> Scoped.for_studio(scope) |> order_by([f], asc: f.name) |> Repo.all()
+    end
+  end
 
   def create_form(%Scope{} = scope, attrs) do
     with :ok <- Authorization.authorize(scope, :"form.write") do

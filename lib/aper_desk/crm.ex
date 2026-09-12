@@ -102,27 +102,29 @@ defmodule AperDesk.Crm do
   simultaneous enquiries from one address resolve to a single row.
   """
   def upsert_contact(%Scope{} = scope, attrs) do
-    attrs = Scoped.put_studio(attrs, scope)
-    email = attrs["email"] && String.downcase(String.trim(attrs["email"]))
+    with :ok <- Authorization.authorize(scope, :"contact.write") do
+      attrs = Scoped.put_studio(attrs, scope)
+      email = attrs["email"] && String.downcase(String.trim(attrs["email"]))
 
-    case email && Repo.get_by(Contact, studio_id: Scope.studio_id(scope), email: email) do
-      %Contact{} = contact ->
-        {:ok, contact}
+      case email && Repo.get_by(Contact, studio_id: Scope.studio_id(scope), email: email) do
+        %Contact{} = contact ->
+          {:ok, contact}
 
-      _ ->
-        case %Contact{} |> Contact.changeset(attrs) |> Repo.insert() do
-          {:ok, contact} ->
-            {:ok, contact}
+        _ ->
+          case %Contact{} |> Contact.changeset(attrs) |> Repo.insert() do
+            {:ok, contact} ->
+              {:ok, contact}
 
-          {:error, changeset} ->
-            # Lost the race: someone else inserted the same address between our
-            # lookup and our insert. Their row is as good as ours.
-            if email && unique_violation?(changeset, :email) do
-              {:ok, Repo.get_by!(Contact, studio_id: Scope.studio_id(scope), email: email)}
-            else
-              {:error, changeset}
-            end
-        end
+            {:error, changeset} ->
+              # Lost the race: someone else inserted the same address between our
+              # lookup and our insert. Their row is as good as ours.
+              if email && unique_violation?(changeset, :email) do
+                {:ok, Repo.get_by!(Contact, studio_id: Scope.studio_id(scope), email: email)}
+              else
+                {:error, changeset}
+              end
+          end
+      end
     end
   end
 
@@ -214,37 +216,46 @@ defmodule AperDesk.Crm do
   measured first-response time, or the dashboard would flatter the studio.
   """
   def record_reply(%Scope{} = scope, id, at \\ DateTime.utc_now()) do
-    with {:ok, lead} <- Scoped.fetch(Lead, scope, id) do
-      lead |> Lead.responded_changeset(at) |> Repo.update()
+    with :ok <- Authorization.authorize(scope, :"lead.write") do
+      with {:ok, lead} <- Scoped.fetch(Lead, scope, id) do
+        lead |> Lead.responded_changeset(at) |> Repo.update()
+      end
     end
   end
 
   @doc "Leads whose reply window has passed with nobody having answered."
   def overdue_leads(%Scope{} = scope, now \\ DateTime.utc_now()) do
-    Lead
-    |> Scoped.for_studio(scope)
-    |> where([l], is_nil(l.first_responded_at) and l.first_response_due_at < ^now)
-    |> where([l], is_nil(l.archived_at) and l.stage not in ^["completed", "lost"])
-    |> order_by([l], asc: l.first_response_due_at)
-    |> preload([:contact, :owner])
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"lead.read") do
+      Lead
+      |> Scoped.for_studio(scope)
+      |> where([l], is_nil(l.first_responded_at) and l.first_response_due_at < ^now)
+      |> where([l], is_nil(l.archived_at) and l.stage not in ^["completed", "lost"])
+      |> order_by([l], asc: l.first_response_due_at)
+      |> preload([:contact, :owner])
+      |> Repo.all()
+    end
   end
 
   @doc "Counts per stage, for the pipeline board headers. One query, not seven."
   def pipeline_summary(%Scope{} = scope) do
-    Lead
-    |> Scoped.for_studio(scope)
-    |> where([l], is_nil(l.archived_at))
-    |> group_by([l], l.stage)
-    |> select([l], {l.stage, count(l.id)})
-    |> Repo.all()
-    |> Map.new()
+    with :ok <- Authorization.authorize(scope, :"lead.read") do
+      Lead
+      |> Scoped.for_studio(scope)
+      |> where([l], is_nil(l.archived_at))
+      |> group_by([l], l.stage)
+      |> select([l], {l.stage, count(l.id)})
+      |> Repo.all()
+      |> Map.new()
+    end
   end
 
   ## Tags
 
-  def list_tags(%Scope{} = scope),
-    do: Tag |> Scoped.for_studio(scope) |> order_by([t], asc: t.name) |> Repo.all()
+  def list_tags(%Scope{} = scope) do
+    with :ok <- Authorization.authorize(scope, :"lead.read") do
+      Tag |> Scoped.for_studio(scope) |> order_by([t], asc: t.name) |> Repo.all()
+    end
+  end
 
   def create_tag(%Scope{} = scope, attrs) do
     with :ok <- Authorization.authorize(scope, :"lead.write") do
@@ -284,25 +295,29 @@ defmodule AperDesk.Crm do
   end
 
   def tags_for(%Scope{} = scope, subject) do
-    Repo.all(
-      from t in Tag,
-        join: g in Tagging,
-        on: g.tag_id == t.id,
-        where:
-          t.studio_id == ^Scope.studio_id(scope) and
-            g.taggable_type == ^Tagging.type_for(subject) and g.taggable_id == ^subject.id,
-        order_by: t.name
-    )
+    with :ok <- Authorization.authorize(scope, :"lead.read") do
+      Repo.all(
+        from t in Tag,
+          join: g in Tagging,
+          on: g.tag_id == t.id,
+          where:
+            t.studio_id == ^Scope.studio_id(scope) and
+              g.taggable_type == ^Tagging.type_for(subject) and g.taggable_id == ^subject.id,
+          order_by: t.name
+      )
+    end
   end
 
   ## Custom fields
 
   def list_custom_fields(%Scope{} = scope, entity \\ "lead") do
-    CustomFieldDefinition
-    |> Scoped.for_studio(scope)
-    |> where([d], d.entity == ^entity)
-    |> order_by([d], asc: d.position, asc: d.key)
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"lead.read") do
+      CustomFieldDefinition
+      |> Scoped.for_studio(scope)
+      |> where([d], d.entity == ^entity)
+      |> order_by([d], asc: d.position, asc: d.key)
+      |> Repo.all()
+    end
   end
 
   def create_custom_field(%Scope{} = scope, attrs) do

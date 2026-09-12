@@ -192,14 +192,16 @@ defmodule AperDesk.Finance do
 
   @doc "Invoices with money outstanding and a due date in the past."
   def overdue_invoices(%Scope{} = scope, today \\ Date.utc_today()) do
-    Invoice
-    |> Scoped.for_studio(scope)
-    |> where([i], i.status in ^Invoice.outstanding_statuses())
-    |> where([i], not is_nil(i.due_on) and i.due_on < ^today)
-    |> where([i], i.paid_cents < i.total_cents)
-    |> preload([:contact])
-    |> order_by([i], asc: i.due_on)
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"invoice.read") do
+      Invoice
+      |> Scoped.for_studio(scope)
+      |> where([i], i.status in ^Invoice.outstanding_statuses())
+      |> where([i], not is_nil(i.due_on) and i.due_on < ^today)
+      |> where([i], i.paid_cents < i.total_cents)
+      |> preload([:contact])
+      |> order_by([i], asc: i.due_on)
+      |> Repo.all()
+    end
   end
 
   @doc """
@@ -209,21 +211,23 @@ defmodule AperDesk.Finance do
   summed after conversion, so a mixed-currency ledger totals correctly.
   """
   def outstanding_total(%Scope{} = scope) do
-    Invoice
-    |> Scoped.for_studio(scope)
-    |> where([i], i.status in ^Invoice.outstanding_statuses())
-    |> select([i], {i.currency, sum(i.total_cents - i.paid_cents), i.fx_rate_to_base})
-    |> group_by([i], [i.currency, i.fx_rate_to_base])
-    |> Repo.all()
-    |> Enum.reduce(Money.zero(scope.currency), fn {currency, amount, rate}, acc ->
-      converted =
-        amount
-        |> to_cents()
-        |> Money.new(currency)
-        |> Money.convert(scope.currency, rate || Decimal.new(1))
+    with :ok <- Authorization.authorize(scope, :"invoice.read") do
+      Invoice
+      |> Scoped.for_studio(scope)
+      |> where([i], i.status in ^Invoice.outstanding_statuses())
+      |> select([i], {i.currency, sum(i.total_cents - i.paid_cents), i.fx_rate_to_base})
+      |> group_by([i], [i.currency, i.fx_rate_to_base])
+      |> Repo.all()
+      |> Enum.reduce(Money.zero(scope.currency), fn {currency, amount, rate}, acc ->
+        converted =
+          amount
+          |> to_cents()
+          |> Money.new(currency)
+          |> Money.convert(scope.currency, rate || Decimal.new(1))
 
-      Money.add(acc, converted)
-    end)
+        Money.add(acc, converted)
+      end)
+    end
   end
 
   ## Payouts

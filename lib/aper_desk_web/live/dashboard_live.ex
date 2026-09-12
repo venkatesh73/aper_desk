@@ -13,7 +13,7 @@ defmodule AperDeskWeb.DashboardLive do
 
   import AperDeskWeb.AppComponents
 
-  alias AperDesk.{Billing, Crm, Finance, Formats, Money, Repo, Scope}
+  alias AperDesk.{Authorization, Billing, Crm, Finance, Formats, Money, Repo, Scope}
   alias AperDeskWeb.Graphql.Resolvers.Helpers
 
   @impl true
@@ -53,7 +53,7 @@ defmodule AperDeskWeb.DashboardLive do
   end
 
   defp subtitle(scope) do
-    overdue = length(Crm.overdue_leads(scope))
+    overdue = length(overdue_leads(scope))
     # The studio's own date format and time zone, not the server's.
     today = Formats.date(scope, Formats.today_for(scope))
 
@@ -65,54 +65,90 @@ defmodule AperDeskWeb.DashboardLive do
   end
 
   defp stats(scope) do
-    pipeline = Crm.pipeline_summary(scope)
-    open = pipeline |> Map.drop(["completed", "lost"]) |> Map.values() |> Enum.sum()
-    overdue = length(Crm.overdue_leads(scope))
+    lead_stats(scope) ++ shoot_stats(scope) ++ money_stats(scope)
+  end
 
-    base = [
-      %{label: "Open leads", value: to_string(open), detail: nil, tone: :neutral},
-      %{
-        label: "Booked",
-        value: to_string(Map.get(pipeline, "booked", 0)),
-        detail: nil,
-        tone: :up
-      },
-      %{
-        label: "Awaiting reply",
-        value: to_string(overdue),
-        detail: if(overdue > 0, do: "past the SLA"),
-        tone: if(overdue > 0, do: :down, else: :neutral)
-      },
-      %{
-        label: "Upcoming shoots",
-        value: to_string(upcoming_count(scope)),
-        detail: nil,
-        tone: :neutral
-      }
-    ]
+  # Each block is added only for a role that may read what is behind it, and
+  # the contexts refuse the read anyway. An HR user sees people and shoots and
+  # no client pipeline at all — not a row of zeroes, which would read as "the
+  # studio has no leads" rather than "this is not yours to see".
+  defp lead_stats(scope) do
+    if Authorization.can?(scope, :"lead.read") do
+      pipeline = Crm.pipeline_summary(scope) |> ok_or(%{})
+      open = pipeline |> Map.drop(["completed", "lost"]) |> Map.values() |> Enum.sum()
+      overdue = length(overdue_leads(scope))
 
-    # Money is added only for roles permitted to read it — see the module doc.
-    if scope.role in [:owner, :finance] do
-      outstanding = Finance.outstanding_total(scope)
-
-      base ++
-        [
-          %{
-            label: "Outstanding",
-            value: Money.to_string(outstanding),
-            detail: if(outstanding.amount > 0, do: "unpaid invoices"),
-            tone: if(outstanding.amount > 0, do: :warning, else: :up)
-          }
-        ]
+      [
+        %{label: "Open leads", value: to_string(open), detail: nil, tone: :neutral},
+        %{
+          label: "Booked",
+          value: to_string(Map.get(pipeline, "booked", 0)),
+          detail: nil,
+          tone: :up
+        },
+        %{
+          label: "Awaiting reply",
+          value: to_string(overdue),
+          detail: if(overdue > 0, do: "past the SLA"),
+          tone: if(overdue > 0, do: :down, else: :neutral)
+        }
+      ]
     else
-      base
+      []
+    end
+  end
+
+  defp shoot_stats(scope) do
+    if Authorization.can?(scope, :"job.read") do
+      [
+        %{
+          label: "Upcoming shoots",
+          value: to_string(upcoming_count(scope)),
+          detail: nil,
+          tone: :neutral
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  # Money is added only for roles permitted to read it — see the module doc.
+  defp money_stats(scope) do
+    if Authorization.can?(scope, :"invoice.read") do
+      outstanding = Finance.outstanding_total(scope) |> ok_or(Money.zero(scope.currency))
+
+      [
+        %{
+          label: "Outstanding",
+          value: Money.to_string(outstanding),
+          detail: if(outstanding.amount > 0, do: "unpaid invoices"),
+          tone: if(outstanding.amount > 0, do: :warning, else: :up)
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  # A context that refuses the read hands back `{:error, :unauthorized}`. The
+  # dashboard is the one screen assembled from many contexts at once, so it
+  # takes the refusal as "nothing to show here" rather than crashing the mount
+  # for everybody.
+  defp ok_or({:error, _reason}, fallback), do: fallback
+  defp ok_or(value, _fallback), do: value
+
+  defp overdue_leads(scope) do
+    case Crm.overdue_leads(scope) do
+      {:error, _reason} -> []
+      leads -> leads
     end
   end
 
   defp attention(scope) do
     leads =
       scope
-      |> Crm.overdue_leads()
+      |> overdue_leads()
       |> Enum.take(5)
       |> Enum.map(fn lead ->
         %{
@@ -124,9 +160,10 @@ defmodule AperDeskWeb.DashboardLive do
       end)
 
     invoices =
-      if scope.role in [:owner, :finance] do
+      if Authorization.can?(scope, :"invoice.read") do
         scope
         |> Finance.overdue_invoices()
+        |> ok_or([])
         |> Enum.take(3)
         |> Enum.map(fn invoice ->
           %{
@@ -144,6 +181,16 @@ defmodule AperDeskWeb.DashboardLive do
   end
 
   defp upcoming(scope) do
+    import Ecto.Query
+
+    if Authorization.can?(scope, :"job.read") do
+      upcoming_jobs(scope)
+    else
+      []
+    end
+  end
+
+  defp upcoming_jobs(scope) do
     import Ecto.Query
 
     AperDesk.Scheduling.Job

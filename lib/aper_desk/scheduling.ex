@@ -144,20 +144,22 @@ defmodule AperDesk.Scheduling do
   issue rather than a correctness one.
   """
   def clashes_for(%Scope{} = scope, user_id, {_from, _to} = period, opts \\ []) do
-    exclude_id = Keyword.get(opts, :exclude)
+    with :ok <- Authorization.authorize(scope, :"assignment.read") do
+      exclude_id = Keyword.get(opts, :exclude)
 
-    Assignment
-    |> Scoped.for_studio(scope)
-    |> where([a], a.user_id == ^user_id and is_nil(a.released_at))
-    |> where([a], fragment("? && ?", a.period, type(^period, TstzRange)))
-    |> then(fn q -> if exclude_id, do: where(q, [a], a.id != ^exclude_id), else: q end)
-    |> then(fn q ->
-      if Keyword.get(opts, :blocking_only, false),
-        do: where(q, [a], a.kind != "hold"),
-        else: q
-    end)
-    |> preload(:job)
-    |> Repo.all()
+      Assignment
+      |> Scoped.for_studio(scope)
+      |> where([a], a.user_id == ^user_id and is_nil(a.released_at))
+      |> where([a], fragment("? && ?", a.period, type(^period, TstzRange)))
+      |> then(fn q -> if exclude_id, do: where(q, [a], a.id != ^exclude_id), else: q end)
+      |> then(fn q ->
+        if Keyword.get(opts, :blocking_only, false),
+          do: where(q, [a], a.kind != "hold"),
+          else: q
+      end)
+      |> preload(:job)
+      |> Repo.all()
+    end
   end
 
   @doc """
@@ -181,23 +183,25 @@ defmodule AperDesk.Scheduling do
   dropdown.
   """
   def available_users(%Scope{} = scope, {_from, _to} = period) do
-    # Holds excluded for the same reason as in `available?/3`: this picker must
-    # offer exactly the people the database would let you book.
-    busy =
-      Assignment
-      |> Scoped.for_studio(scope)
-      |> where([a], is_nil(a.released_at) and a.kind != "hold")
-      |> where([a], fragment("? && ?", a.period, type(^period, TstzRange)))
-      |> select([a], a.user_id)
+    with :ok <- Authorization.authorize(scope, :"assignment.read") do
+      # Holds excluded for the same reason as in `available?/3`: this picker must
+      # offer exactly the people the database would let you book.
+      busy =
+        Assignment
+        |> Scoped.for_studio(scope)
+        |> where([a], is_nil(a.released_at) and a.kind != "hold")
+        |> where([a], fragment("? && ?", a.period, type(^period, TstzRange)))
+        |> select([a], a.user_id)
 
-    from(m in AperDesk.Accounts.Membership,
-      where:
-        m.studio_id == ^Scope.studio_id(scope) and m.status == "active" and
-          m.user_id not in subquery(busy),
-      preload: [:user],
-      select: m
-    )
-    |> Repo.all()
+      from(m in AperDesk.Accounts.Membership,
+        where:
+          m.studio_id == ^Scope.studio_id(scope) and m.status == "active" and
+            m.user_id not in subquery(busy),
+        preload: [:user],
+        select: m
+      )
+      |> Repo.all()
+    end
   end
 
   @doc "Assignments overlapping a window, for the calendar view."
@@ -256,25 +260,29 @@ defmodule AperDesk.Scheduling do
 
   @doc "Holds that will lapse within `days`, so a pencilled date is not lost silently."
   def holds_expiring(%Scope{} = scope, days \\ 14) do
-    now = DateTime.utc_now()
-    until = DateTime.add(now, days * 24 * 60 * 60, :second)
+    with :ok <- Authorization.authorize(scope, :"assignment.read") do
+      now = DateTime.utc_now()
+      until = DateTime.add(now, days * 24 * 60 * 60, :second)
 
-    Assignment
-    |> Scoped.for_studio(scope)
-    |> where([a], a.kind == "hold" and is_nil(a.released_at))
-    |> where([a], not is_nil(a.expires_at) and a.expires_at >= ^now and a.expires_at <= ^until)
-    |> order_by([a], asc: a.expires_at)
-    |> preload([:job, :user])
-    |> Repo.all()
+      Assignment
+      |> Scoped.for_studio(scope)
+      |> where([a], a.kind == "hold" and is_nil(a.released_at))
+      |> where([a], not is_nil(a.expires_at) and a.expires_at >= ^now and a.expires_at <= ^until)
+      |> order_by([a], asc: a.expires_at)
+      |> preload([:job, :user])
+      |> Repo.all()
+    end
   end
 
   ## Availability and public booking
 
   def list_availability(%Scope{} = scope) do
-    AvailabilityRule
-    |> Scoped.for_studio(scope)
-    |> order_by([r], asc: r.day_of_week, asc: r.starts_at_minute)
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"assignment.read") do
+      AvailabilityRule
+      |> Scoped.for_studio(scope)
+      |> order_by([r], asc: r.day_of_week, asc: r.starts_at_minute)
+      |> Repo.all()
+    end
   end
 
   def set_availability(%Scope{} = scope, attrs) do

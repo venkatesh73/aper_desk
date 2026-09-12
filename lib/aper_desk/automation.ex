@@ -235,14 +235,16 @@ defmodule AperDesk.Automation do
 
   @doc "Everything waiting on a person in this studio. One indexed query."
   def awaiting_approval(%Scope{} = scope) do
-    Repo.all(
-      from s in AutomationRunStep,
-        join: r in AutomationRun,
-        on: r.id == s.run_id,
-        where: r.studio_id == ^Scope.studio_id(scope) and s.status == "awaiting_approval",
-        order_by: [asc: s.inserted_at],
-        preload: [run: :workflow]
-    )
+    with :ok <- Authorization.authorize(scope, :"workflow.read") do
+      Repo.all(
+        from s in AutomationRunStep,
+          join: r in AutomationRun,
+          on: r.id == s.run_id,
+          where: r.studio_id == ^Scope.studio_id(scope) and s.status == "awaiting_approval",
+          order_by: [asc: s.inserted_at],
+          preload: [run: :workflow]
+      )
+    end
   end
 
   def approve_step(%Scope{} = scope, step_id) do
@@ -290,11 +292,13 @@ defmodule AperDesk.Automation do
   ## Nurture sequences
 
   def list_sequences(%Scope{} = scope) do
-    NurtureSequence
-    |> Scoped.for_studio(scope)
-    |> preload(:steps)
-    |> order_by([s], asc: s.name)
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"workflow.read") do
+      NurtureSequence
+      |> Scoped.for_studio(scope)
+      |> preload(:steps)
+      |> order_by([s], asc: s.name)
+      |> Repo.all()
+    end
   end
 
   def create_sequence(%Scope{} = scope, attrs) do
@@ -331,17 +335,19 @@ defmodule AperDesk.Automation do
 
   @doc "The history a photographer reads, newest first."
   def activity(%Scope{} = scope, opts \\ []) do
-    ActivityLog
-    |> Scoped.for_studio(scope)
-    |> then(fn q ->
-      case {opts[:subject_type], opts[:subject_id]} do
-        {nil, _} -> q
-        {type, id} -> where(q, [l], l.subject_type == ^type and l.subject_id == ^id)
-      end
-    end)
-    |> order_by([l], desc: l.occurred_at)
-    |> limit(^Keyword.get(opts, :limit, 50))
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"workflow.read") do
+      ActivityLog
+      |> Scoped.for_studio(scope)
+      |> then(fn q ->
+        case {opts[:subject_type], opts[:subject_id]} do
+          {nil, _} -> q
+          {type, id} -> where(q, [l], l.subject_type == ^type and l.subject_id == ^id)
+        end
+      end)
+      |> order_by([l], desc: l.occurred_at)
+      |> limit(^Keyword.get(opts, :limit, 50))
+      |> Repo.all()
+    end
   end
 
   @doc """
@@ -352,18 +358,20 @@ defmodule AperDesk.Automation do
   on, rather than discovering it in their clients' inboxes.
   """
   def preview_workflow(%Scope{} = scope, %Workflow{} = workflow, opts \\ []) do
-    since =
-      Keyword.get(opts, :since, DateTime.add(DateTime.utc_now(), -90 * 24 * 60 * 60, :second))
+    with :ok <- Authorization.authorize(scope, :"workflow.read") do
+      since =
+        Keyword.get(opts, :since, DateTime.add(DateTime.utc_now(), -90 * 24 * 60 * 60, :second))
 
-    Repo.all(
-      from e in OutboxEvent,
-        where:
-          e.studio_id == ^Scope.studio_id(scope) and e.name == ^workflow.trigger_event and
-            e.occurred_at >= ^since,
-        order_by: [desc: e.occurred_at],
-        limit: 500
-    )
-    |> Enum.filter(&Workflow.matches?(%{workflow | active: true}, &1.payload))
+      Repo.all(
+        from e in OutboxEvent,
+          where:
+            e.studio_id == ^Scope.studio_id(scope) and e.name == ^workflow.trigger_event and
+              e.occurred_at >= ^since,
+          order_by: [desc: e.occurred_at],
+          limit: 500
+      )
+      |> Enum.filter(&Workflow.matches?(%{workflow | active: true}, &1.payload))
+    end
   end
 
   ## Internals

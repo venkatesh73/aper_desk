@@ -182,27 +182,31 @@ defmodule AperDesk.Sales do
 
   @doc "Quotes past their validity date that nobody has acted on."
   def expire_quotes(%Scope{} = scope, today \\ Date.utc_today()) do
-    {count, _} =
-      Repo.update_all(
-        from(q in Quote,
-          where:
-            q.studio_id == ^Scope.studio_id(scope) and q.status in ^Quote.open_statuses() and
-              not is_nil(q.valid_until) and q.valid_until < ^today
-        ),
-        set: [status: "expired", updated_at: DateTime.utc_now()]
-      )
+    with :ok <- Authorization.authorize(scope, :"quote.write") do
+      {count, _} =
+        Repo.update_all(
+          from(q in Quote,
+            where:
+              q.studio_id == ^Scope.studio_id(scope) and q.status in ^Quote.open_statuses() and
+                not is_nil(q.valid_until) and q.valid_until < ^today
+          ),
+          set: [status: "expired", updated_at: DateTime.utc_now()]
+        )
 
-    count
+      count
+    end
   end
 
   ## Contract templates
 
   def list_templates(%Scope{} = scope) do
-    ContractTemplate
-    |> Scoped.for_studio(scope)
-    |> where([t], is_nil(t.archived_at))
-    |> order_by([t], asc: t.name)
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"contract.read") do
+      ContractTemplate
+      |> Scoped.for_studio(scope)
+      |> where([t], is_nil(t.archived_at))
+      |> order_by([t], asc: t.name)
+      |> Repo.all()
+    end
   end
 
   def create_template(%Scope{} = scope, attrs) do

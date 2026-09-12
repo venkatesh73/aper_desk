@@ -19,16 +19,18 @@ defmodule AperDesk.Catalog do
   alias Ecto.Multi
 
   def list_packages(%Scope{} = scope, opts \\ []) do
-    Package
-    |> Scoped.for_studio(scope)
-    |> then(fn q ->
-      if Keyword.get(opts, :include_archived, false),
-        do: q,
-        else: where(q, [p], is_nil(p.archived_at))
-    end)
-    |> preload([:items, :media])
-    |> order_by([p], asc: p.position, asc: p.name)
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"package.read") do
+      Package
+      |> Scoped.for_studio(scope)
+      |> then(fn q ->
+        if Keyword.get(opts, :include_archived, false),
+          do: q,
+          else: where(q, [p], is_nil(p.archived_at))
+      end)
+      |> preload([:items, :media])
+      |> order_by([p], asc: p.position, asc: p.name)
+      |> Repo.all()
+    end
   end
 
   @doc "Packages a client may see on the public booking page."
@@ -42,9 +44,11 @@ defmodule AperDesk.Catalog do
   end
 
   def fetch_package(%Scope{} = scope, id) do
-    case Package |> Scoped.for_studio(scope) |> preload([:items, :media]) |> Repo.get(id) do
-      nil -> {:error, :not_found}
-      package -> {:ok, package}
+    with :ok <- Authorization.authorize(scope, :"package.read") do
+      case Package |> Scoped.for_studio(scope) |> preload([:items, :media]) |> Repo.get(id) do
+        nil -> {:error, :not_found}
+        package -> {:ok, package}
+      end
     end
   end
 
@@ -161,10 +165,12 @@ defmodule AperDesk.Catalog do
   end
 
   def list_media(%Scope{} = scope, package_id) do
-    PackageMedia
-    |> Scoped.for_studio(scope)
-    |> where([m], m.package_id == ^package_id)
-    |> order_by([m], asc: m.position, asc: m.filename)
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"package.read") do
+      PackageMedia
+      |> Scoped.for_studio(scope)
+      |> where([m], m.package_id == ^package_id)
+      |> order_by([m], asc: m.position, asc: m.filename)
+      |> Repo.all()
+    end
   end
 end

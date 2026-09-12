@@ -134,11 +134,13 @@ defmodule AperDesk.Galleries do
   end
 
   def list_media(%Scope{} = scope, gallery_id) do
-    GalleryMedia
-    |> Scoped.for_studio(scope)
-    |> where([m], m.gallery_id == ^gallery_id)
-    |> order_by([m], asc: m.position, asc: m.filename)
-    |> Repo.all()
+    with :ok <- Authorization.authorize(scope, :"gallery.read") do
+      GalleryMedia
+      |> Scoped.for_studio(scope)
+      |> where([m], m.gallery_id == ^gallery_id)
+      |> order_by([m], asc: m.position, asc: m.filename)
+      |> Repo.all()
+    end
   end
 
   @doc """
@@ -312,13 +314,15 @@ defmodule AperDesk.Galleries do
   end
 
   def list_selections(%Scope{} = scope, gallery_id, kind \\ "favourite") do
-    with {:ok, _gallery} <- Scoped.fetch(Gallery, scope, gallery_id) do
-      {:ok,
-       Repo.all(
-         from s in GallerySelection,
-           where: s.gallery_id == ^gallery_id and s.kind == ^kind,
-           preload: [:media, :share]
-       )}
+    with :ok <- Authorization.authorize(scope, :"gallery.read") do
+      with {:ok, _gallery} <- Scoped.fetch(Gallery, scope, gallery_id) do
+        {:ok,
+         Repo.all(
+           from s in GallerySelection,
+             where: s.gallery_id == ^gallery_id and s.kind == ^kind,
+             preload: [:media, :share]
+         )}
+      end
     end
   end
 
