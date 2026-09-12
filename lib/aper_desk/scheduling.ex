@@ -23,6 +23,7 @@ defmodule AperDesk.Scheduling do
   alias AperDesk.Scheduling.{Assignment, AvailabilityRule, BookingSlot, Job, TstzRange}
   alias AperDesk.Scope
   alias AperDesk.Scoped
+  alias AperDesk.Visibility
   alias Ecto.Multi
 
   ## Jobs
@@ -31,7 +32,9 @@ defmodule AperDesk.Scheduling do
     with :ok <- Authorization.authorize(scope, :"job.read") do
       {:ok,
        Job
+       |> from(as: :job)
        |> Scoped.for_studio(scope)
+       |> Visibility.jobs(scope)
        |> filter_jobs(opts)
        |> order_by([j], asc: j.starts_at)
        |> Repo.all()}
@@ -39,8 +42,9 @@ defmodule AperDesk.Scheduling do
   end
 
   def fetch_job(%Scope{} = scope, id) do
-    with :ok <- Authorization.authorize(scope, :"job.read") do
-      Scoped.fetch(Job, scope, id)
+    with :ok <- Authorization.authorize(scope, :"job.read"),
+         {:ok, job} <- Scoped.fetch(Job, scope, id) do
+      if Visibility.visible?(scope, job), do: {:ok, job}, else: {:error, :unauthorized}
     end
   end
 

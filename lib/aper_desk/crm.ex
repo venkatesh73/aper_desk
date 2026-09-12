@@ -20,6 +20,7 @@ defmodule AperDesk.Crm do
   alias AperDesk.Repo
   alias AperDesk.Scope
   alias AperDesk.Scoped
+  alias AperDesk.Visibility
   alias Ecto.Multi
 
   ## Contacts
@@ -135,6 +136,7 @@ defmodule AperDesk.Crm do
       {:ok,
        Lead
        |> Scoped.for_studio(scope)
+       |> Visibility.leads(scope)
        |> filter_leads(opts)
        |> preload([:contact, :owner])
        |> order_by([l], desc: l.inserted_at)
@@ -144,8 +146,12 @@ defmodule AperDesk.Crm do
   end
 
   def fetch_lead(%Scope{} = scope, id) do
-    with :ok <- Authorization.authorize(scope, :"lead.read") do
-      Scoped.fetch(Lead, scope, id)
+    with :ok <- Authorization.authorize(scope, :"lead.read"),
+         {:ok, lead} <- Scoped.fetch(Lead, scope, id) do
+      # Refused rather than reported missing. Both end the request, but a
+      # photographer looking at a colleague's lead id should be told it is not
+      # theirs, not that the studio has no such lead.
+      if Visibility.visible?(scope, lead), do: {:ok, lead}, else: {:error, :unauthorized}
     end
   end
 
@@ -228,6 +234,7 @@ defmodule AperDesk.Crm do
     with :ok <- Authorization.authorize(scope, :"lead.read") do
       Lead
       |> Scoped.for_studio(scope)
+      |> Visibility.leads(scope)
       |> where([l], is_nil(l.first_responded_at) and l.first_response_due_at < ^now)
       |> where([l], is_nil(l.archived_at) and l.stage not in ^["completed", "lost"])
       |> order_by([l], asc: l.first_response_due_at)
@@ -241,6 +248,7 @@ defmodule AperDesk.Crm do
     with :ok <- Authorization.authorize(scope, :"lead.read") do
       Lead
       |> Scoped.for_studio(scope)
+      |> Visibility.leads(scope)
       |> where([l], is_nil(l.archived_at))
       |> group_by([l], l.stage)
       |> select([l], {l.stage, count(l.id)})

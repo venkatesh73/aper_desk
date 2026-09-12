@@ -29,6 +29,7 @@ defmodule AperDesk.Galleries do
   alias AperDesk.Repo
   alias AperDesk.Scope
   alias AperDesk.Scoped
+  alias AperDesk.Visibility
   alias AperDesk.Storage
   alias Ecto.Multi
 
@@ -38,7 +39,9 @@ defmodule AperDesk.Galleries do
     with :ok <- Authorization.authorize(scope, :"gallery.read") do
       {:ok,
        Gallery
+       |> from(as: :gallery)
        |> Scoped.for_studio(scope)
+       |> Visibility.galleries(scope)
        |> then(fn q ->
          case opts[:status] do
            nil -> q
@@ -52,8 +55,9 @@ defmodule AperDesk.Galleries do
   end
 
   def fetch_gallery(%Scope{} = scope, id) do
-    with :ok <- Authorization.authorize(scope, :"gallery.read") do
-      Scoped.fetch(Gallery, scope, id)
+    with :ok <- Authorization.authorize(scope, :"gallery.read"),
+         {:ok, gallery} <- Scoped.fetch(Gallery, scope, id) do
+      if Visibility.visible?(scope, gallery), do: {:ok, gallery}, else: {:error, :unauthorized}
     end
   end
 
