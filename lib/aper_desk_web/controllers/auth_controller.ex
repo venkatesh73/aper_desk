@@ -38,10 +38,12 @@ defmodule AperDeskWeb.AuthController do
         # skipping this would leave a brand-new account unable to create
         # anything at all.
         {:ok, scope} = Accounts.scope_for(user, studio.id)
-        start_trial(scope)
 
+        # Not discarded. Without a subscription every limit check refuses, so a
+        # studio that lands on the dashboard unable to create a lead is worse
+        # than one told plainly that something went wrong at sign-up.
         conn
-        |> put_flash(:info, "Welcome to AperDesk. Your 30-day trial has started.")
+        |> put_flash(:info, trial_message(start_trial(scope)))
         |> sign_in(user, studio.id)
 
       {:error, changeset} ->
@@ -75,6 +77,13 @@ defmodule AperDeskWeb.AuthController do
         )
     end
   end
+
+  defp trial_message({:ok, _subscription}),
+    do: "Welcome to AperDesk. Your 30-day trial has started."
+
+  defp trial_message(_error),
+    do:
+      "Welcome to AperDesk. We could not start your trial automatically — open Settings and choose a plan before you begin."
 
   ## Invitations
 
@@ -432,14 +441,16 @@ defmodule AperDeskWeb.AuthController do
   defp landing_path(nil), do: ~p"/sign-in"
   defp landing_path(_studio_id), do: ~p"/app"
 
-  defp start_trial(scope) do
-    case Billing.start_trial(scope, "solo") do
-      {:ok, _subscription} -> :ok
-      # A missing plan row is a seeding problem, not something to fail sign-up
-      # over — the account still works, it just has no plan until seeds run.
-      {:error, _reason} -> :ok
-    end
-  end
+  # Not pinned to a plan key. `start_trial/1` picks the entry plan by position,
+  # so a studio renaming or reordering its plans does not silently stop new
+  # sign-ups getting one.
+  #
+  # The result is returned rather than swallowed. The comment here used to say
+  # a studio without a plan "still works, it just has no plan" — that is not
+  # true: every limit check reads the plan, so the account can create no lead,
+  # no package and no gallery. Landing on a dashboard that refuses everything
+  # with no explanation is worse than being told at the door.
+  defp start_trial(scope), do: Billing.start_trial(scope)
 
   defp user_agent(conn) do
     conn

@@ -485,6 +485,10 @@ defmodule AperDeskWeb.TemplatesLive do
   """
   def tokens, do: Templating.tokens()
 
+  @doc "The studio's own slug, which is half of a form's public address."
+  def studio_slug(%{studio: %{slug: slug}}) when is_binary(slug), do: slug
+  def studio_slug(_scope), do: "your-studio"
+
   defp money(scope, cents),
     do: cents |> Money.new(scope.currency) |> Money.to_string()
 

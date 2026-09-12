@@ -103,7 +103,7 @@ defmodule AperDesk.Crm do
   simultaneous enquiries from one address resolve to a single row.
   """
   def upsert_contact(%Scope{} = scope, attrs) do
-    with :ok <- Authorization.authorize(scope, :"contact.write") do
+    with :ok <- authorize_or_system(scope, :"contact.write") do
       attrs = Scoped.put_studio(attrs, scope)
       email = attrs["email"] && String.downcase(String.trim(attrs["email"]))
 
@@ -164,7 +164,7 @@ defmodule AperDesk.Crm do
   exist.
   """
   def create_lead(%Scope{} = scope, attrs) do
-    with :ok <- Authorization.authorize(scope, :"lead.write") do
+    with :ok <- authorize_or_system(scope, :"lead.write") do
       attrs = attrs |> Scoped.put_studio(scope) |> put_response_due(scope)
 
       Multi.new()
@@ -256,6 +256,16 @@ defmodule AperDesk.Crm do
       |> Map.new()
     end
   end
+
+  # A studio-only scope — no user, no role — is how the system paths identify
+  # themselves: a public form submission and an inbound email have a tenant but
+  # nobody acting. Those are authorised by reaching them at all (a valid form
+  # slug, a connected mailbox), so a permission check would only ever refuse
+  # them. A scope with a user in it is a person, and is checked normally.
+  defp authorize_or_system(%Scope{user: nil, studio: %{}}, _permission), do: :ok
+
+  defp authorize_or_system(%Scope{} = scope, permission),
+    do: Authorization.authorize(scope, permission)
 
   ## Tags
 

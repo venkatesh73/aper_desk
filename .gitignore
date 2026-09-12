@@ -49,3 +49,6 @@ ss_claude_trace_hook.log
 
 # Gallery files written by the local storage adapter.
 /priv/static/uploads/
+
+# Coverage output
+/cover/

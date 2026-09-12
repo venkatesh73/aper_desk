@@ -93,9 +93,9 @@ defmodule AperDesk.Billing do
   end
 
   @doc "Put a new studio on its free trial."
-  def start_trial(%Scope{} = scope, plan_key \\ "basic") do
+  def start_trial(%Scope{} = scope, plan_key \\ nil) do
     with :ok <- Authorization.authorize(scope, :"billing.write"),
-         %Plan{} = plan <- current_plan(plan_key) do
+         %Plan{} = plan <- trial_plan(plan_key) do
       %Subscription{}
       |> Subscription.changeset(%{
         studio_id: Scope.studio_id(scope),
@@ -110,6 +110,21 @@ defmodule AperDesk.Billing do
       error -> error
     end
   end
+
+  # The entry plan, by position, rather than a hardcoded key. The default used
+  # to be `"basic"`, which exists in no seed file and never has — so every
+  # studio created through sign-up got no subscription at all, and since every
+  # limit check reads the plan, a brand-new account could not create a lead, a
+  # package or a gallery. The failure was silent because the caller discarded
+  # the result.
+  defp trial_plan(nil) do
+    case list_public_plans() do
+      [] -> nil
+      plans -> List.first(plans)
+    end
+  end
+
+  defp trial_plan(key), do: current_plan(key)
 
   @doc """
   Move to a different plan.

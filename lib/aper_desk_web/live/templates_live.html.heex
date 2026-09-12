@@ -147,7 +147,7 @@
                       <span class="name">{form.name}</span>
                       <span :if={not form.active} class="pill">inactive</span>
                     </td>
-                    <td class="mono">/f/{form.slug}</td>
+                    <td class="mono">/f/{studio_slug(@current_scope)}/{form.slug}</td>
                     <td>{length(AperDesk.Comms.LeadCaptureForm.field_list(form))}</td>
                     <td>{form.submission_count}</td>
                     <td style="text-align:right">

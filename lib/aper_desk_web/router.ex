@@ -53,6 +53,11 @@ defmodule AperDeskWeb.Router do
     # scope here, and the gallery id opens nothing.
     live "/g/:token", ClientGalleryLive, :show
     live "/q/:token", ClientQuoteLive, :show
+
+    # The form a studio embeds on its own site. Public by definition: the
+    # protection is that submissions are validated against the form's own field
+    # definitions and unknown keys are dropped.
+    live "/f/:studio/:form", PublicFormLive, :show
   end
 
   # The signed-in application. RequireAuth guards the HTTP request that renders

@@ -9,6 +9,7 @@ defmodule AperDesk.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
+      test_coverage: [tool: ExCoveralls],
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader]
@@ -27,7 +28,13 @@ defmodule AperDesk.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test]
+      preferred_envs: [
+        precommit: :test,
+        qa: :test,
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.html": :test
+      ]
     ]
   end
 
@@ -78,6 +85,7 @@ defmodule AperDesk.MixProject do
 
       # --- Background jobs ---
       {:oban, "~> 2.19"},
+      {:excoveralls, "~> 0.18", only: [:dev, :test], runtime: false},
 
       # --- Mail ---
       {:swoosh, "~> 1.16"},
@@ -122,6 +130,16 @@ defmodule AperDesk.MixProject do
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      # One command before pushing. Order matters: formatting and compile
+      # warnings are cheap and fail fast, the suite is slower, and coverage is
+      # last because it re-runs everything.
+      qa: [
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "ecto.create --quiet",
+        "ecto.migrate --quiet",
+        "coveralls"
+      ],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind aper_desk", "esbuild aper_desk"],
       "assets.deploy": [

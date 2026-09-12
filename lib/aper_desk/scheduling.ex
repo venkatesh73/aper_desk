@@ -347,7 +347,13 @@ defmodule AperDesk.Scheduling do
           "period" => {from, to}
         })
 
-      case repo.insert(Assignment.changeset(%Assignment{}, attrs)) do
+      # `mode: :savepoint` is load-bearing. The exclusion constraint firing
+      # aborts the surrounding Postgres transaction, and this insert runs
+      # inside one — so without a savepoint the very next statement, including
+      # the `clashes_for/4` query that turns the violation into a useful
+      # answer, fails with "current transaction is aborted". The clash path
+      # would report a driver error instead of the clash.
+      case repo.insert(Assignment.changeset(%Assignment{}, attrs), mode: :savepoint) do
         {:ok, assignment} ->
           {:cont, {:ok, [assignment | acc]}}
 

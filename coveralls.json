@@ -1,0 +1,14 @@
+{
+  "coverage_options": {
+    "minimum_coverage": 64,
+    "treat_no_relevant_lines_as_covered": true
+  },
+  "skip_files": [
+    "test/support",
+    "lib/aper_desk_web/graphql/types",
+    "lib/aper_desk/mailer.ex",
+    "lib/aper_desk/vault.ex",
+    "lib/aper_desk/schema.ex",
+    "lib/mix/tasks"
+  ]
+}
