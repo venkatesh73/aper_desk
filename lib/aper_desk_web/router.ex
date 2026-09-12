@@ -107,7 +107,7 @@ defmodule AperDeskWeb.Router do
       live "/finance/invoices/new", InvoiceLive, :new
       live "/finance/invoices/:id", InvoiceLive, :show
       live "/team", TeamLive, :index
-      live "/settings", SoonLive, :settings
+      live "/settings", SettingsLive, :index
     end
   end
 

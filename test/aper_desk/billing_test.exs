@@ -94,4 +94,76 @@ defmodule AperDesk.BillingTest do
       assert usage.reconciled_at
     end
   end
+
+  describe "the seats counter" do
+    test "follows memberships, not the nightly sweep", %{} do
+      %{studio: studio, scope: scope} = AperDesk.Fixtures.studio_fixture()
+      AperDesk.Fixtures.plan_fixture(studio)
+
+      assert seats(studio) == 1
+
+      member = add_member(studio, "active")
+      assert seats(studio) == 2
+
+      # Suspending frees the seat; a suspended person cannot sign in.
+      {:ok, _} = AperDesk.Accounts.update_member(scope, member.id, %{"status" => "suspended"})
+      assert seats(studio) == 1
+
+      {:ok, _} = AperDesk.Accounts.update_member(scope, member.id, %{"status" => "active"})
+      assert seats(studio) == 2
+
+      # Removing marks them left rather than deleting, which is still a freed seat.
+      {:ok, _} = AperDesk.Accounts.remove_member(scope, member.id)
+      assert seats(studio) == 1
+    end
+
+    test "agrees with what reconcile/2 would compute", %{} do
+      %{studio: studio} = AperDesk.Fixtures.studio_fixture()
+      AperDesk.Fixtures.plan_fixture(studio)
+
+      add_member(studio, "active")
+      add_member(studio, "active")
+      add_member(studio, "invited")
+
+      before = seats(studio)
+      {:ok, _} = AperDesk.Billing.reconcile_usage(studio.id)
+
+      # The trigger and the sweep must not disagree, or the nightly run would
+      # silently "correct" a number that was already right.
+      assert seats(studio) == before
+      assert seats(studio) == 3
+    end
+
+    test "a studio with memberships can still be deleted", %{} do
+      %{studio: studio} = AperDesk.Fixtures.studio_fixture()
+      AperDesk.Fixtures.plan_fixture(studio)
+      add_member(studio, "active")
+
+      # The delete cascades to memberships and fires the trigger. Upserting
+      # there would recreate studio_usage for a studio already gone.
+      assert {:ok, _} = AperDesk.Repo.delete(studio)
+    end
+  end
+
+  defp seats(studio) do
+    AperDesk.Repo.get(AperDesk.Billing.StudioUsage, studio.id).seats_used
+  end
+
+  defp add_member(studio, status) do
+    {:ok, user} =
+      AperDesk.Accounts.register_user(%{
+        "name" => "Crew",
+        "email" => "crew-#{System.unique_integer([:positive])}@example.com",
+        "password" => "a sufficiently long passphrase"
+      })
+
+    AperDesk.Repo.insert!(
+      AperDesk.Accounts.Membership.changeset(%AperDesk.Accounts.Membership{}, %{
+        user_id: user.id,
+        studio_id: studio.id,
+        role: "photographer",
+        status: status
+      })
+    )
+  end
 end

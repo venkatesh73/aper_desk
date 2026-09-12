@@ -2,6 +2,7 @@ defmodule AperDeskWeb.DashboardLiveTest do
   use AperDeskWeb.ConnCase, async: true
 
   import AperDesk.Fixtures
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
   alias AperDesk.Accounts
@@ -87,8 +88,11 @@ defmodule AperDeskWeb.DashboardLiveTest do
       user: user,
       studio: studio
     } do
-      # A brand-new studio has no studio_usage row — the triggers create one on
-      # its first write. The panel must still render.
+      # A studio can have no studio_usage row at all: the triggers create one on
+      # the first write that counts, and a restore or an import can leave it
+      # missing. The panel must still render rather than blanking out.
+      Repo.delete_all(from(u in AperDesk.Billing.StudioUsage, where: u.studio_id == ^studio.id))
+
       refute Repo.get(AperDesk.Billing.StudioUsage, studio.id)
 
       {:ok, _view, html} = conn |> sign_in(user, studio) |> live(~p"/app")

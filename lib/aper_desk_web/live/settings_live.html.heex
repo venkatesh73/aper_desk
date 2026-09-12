@@ -1,0 +1,332 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:settings} />
+
+    <div class="main">
+      <.topbar title="Settings" subtitle={@studio.name} />
+
+      <div class="settings">
+        <div class="snav card" style="padding:6px">
+          <a
+            :for={section <- sections(@current_scope)}
+            class={@section == section && "on"}
+            href="#"
+            phx-click="section"
+            phx-value-section={section}
+          >
+            {section_label(section)}
+          </a>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+          <%= case @section do %>
+            <% "studio" -> %>
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Studio profile</h3>
+                </div>
+                <.form
+                  for={@studio_form}
+                  phx-change="validate-studio"
+                  phx-submit="save-studio"
+                  class="form"
+                >
+                  <.text_field field={@studio_form[:name]} label="Studio name" required />
+                  <.text_field
+                    field={@studio_form[:tagline]}
+                    label="Tagline"
+                    placeholder="Documentary wedding photography in Lisbon"
+                  />
+                  <.textarea_field
+                    field={@studio_form[:about]}
+                    label="About"
+                    rows={4}
+                    hint="Shown on your public booking page and in the directory."
+                  />
+
+                  <.row layout="two">
+                    <.text_field field={@studio_form[:city]} label="Base city" />
+                    <.text_field
+                      field={@studio_form[:country_code]}
+                      label="Country code"
+                      placeholder="PT"
+                      maxlength="2"
+                    />
+                  </.row>
+
+                  <.row layout="two">
+                    <.text_field
+                      field={@studio_form[:support_email]}
+                      label="Contact email"
+                      type="email"
+                    />
+                    <.text_field field={@studio_form[:phone]} label="Phone" />
+                  </.row>
+
+                  <.row layout="two">
+                    <.text_field
+                      field={@studio_form[:website]}
+                      label="Website"
+                      placeholder="https://"
+                    />
+                    <.text_field
+                      field={@studio_form[:brand_color]}
+                      label="Brand colour"
+                      placeholder="#B8722E"
+                      hint="Used on your booking page and client galleries."
+                    />
+                  </.row>
+
+                  <.checkbox_field
+                    field={@studio_form[:listed_in_directory]}
+                    label="List the studio in the public directory"
+                    hint="Clients searching your city can find you. Turn it off and only your own links reach you."
+                  />
+
+                  <.form_actions>
+                    <button type="submit" class="btn primary">Save changes</button>
+                  </.form_actions>
+                </.form>
+              </div>
+            <% "formats" -> %>
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Dates and money</h3>
+                </div>
+                <.form
+                  for={@studio_form}
+                  phx-change="validate-studio"
+                  phx-submit="save-studio"
+                  class="form"
+                >
+                  <.select_field
+                    field={@studio_form[:base_currency]}
+                    label="Reporting currency"
+                    options={currency_options()}
+                    hint="You can still quote clients in another currency. This is the one your reports total in."
+                  />
+
+                  <.select_field
+                    field={@studio_form[:time_zone]}
+                    label="Time zone"
+                    options={@time_zones}
+                    hint="Shoot times, gallery windows and reply targets are all read in this zone."
+                  />
+
+                  <.row layout="two">
+                    <.select_field
+                      field={@studio_form[:date_format]}
+                      label="Dates"
+                      options={date_format_options()}
+                    />
+                    <.select_field
+                      field={@studio_form[:time_format]}
+                      label="Times"
+                      options={time_format_options()}
+                    />
+                  </.row>
+
+                  <.select_field
+                    field={@studio_form[:week_starts_on]}
+                    label="Weeks start on"
+                    options={week_start_options()}
+                  />
+
+                  <.select_field
+                    field={@studio_form[:reply_sla_minutes]}
+                    label="Reply target"
+                    options={sla_options()}
+                    hint="A lead past this shows as overdue on the dashboard."
+                  />
+
+                  <div class="hint">
+                    <b>Today reads as</b>
+                    <span style="display:block;margin-top:2px" class="mono">
+                      {@format_sample}
+                    </span>
+                  </div>
+
+                  <.form_actions>
+                    <button type="submit" class="btn primary">Save changes</button>
+                  </.form_actions>
+                </.form>
+              </div>
+            <% "account" -> %>
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Your account</h3>
+                </div>
+                <.form
+                  for={@account_form}
+                  phx-change="validate-account"
+                  phx-submit="save-account"
+                  class="form"
+                >
+                  <.text_field field={@account_form[:name]} label="Your name" required />
+                  <.field label="Email">
+                    <input type="email" value={@current_scope.user.email} disabled />
+                    <span class="hint-line">
+                      Changing the address you sign in with is not done from here yet.
+                    </span>
+                  </.field>
+                  <.text_field field={@account_form[:phone]} label="Phone" />
+
+                  <.form_actions>
+                    <button type="submit" class="btn primary">Save changes</button>
+                  </.form_actions>
+                </.form>
+              </div>
+
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Change your password</h3>
+                </div>
+                <.form for={@password_form} phx-submit="change-password" class="form">
+                  <.field label="Your current password">
+                    <input type="password" name="password[current]" required />
+                  </.field>
+                  <.row layout="two">
+                    <.field label="New password">
+                      <input type="password" name="password[new]" required />
+                    </.field>
+                    <.field label="Again">
+                      <input type="password" name="password[confirmation]" required />
+                    </.field>
+                  </.row>
+
+                  <div class="hint">
+                    <b>Every other session ends</b>
+                    <span style="display:block;margin-top:2px">
+                      Including this one — you will sign in again. If you are changing it because
+                      something looks wrong, leaving the other sessions alive would defeat the point.
+                    </span>
+                  </div>
+
+                  <.form_actions>
+                    <button type="submit" class="btn primary">Change it</button>
+                  </.form_actions>
+                </.form>
+              </div>
+            <% "roles" -> %>
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Roles and permissions</h3>
+                  <span class="spacer"></span>
+                  <a class="btn sm" href={~p"/app/team"}>Manage the team</a>
+                </div>
+
+                <p style="color:var(--muted);font-size:13px;margin:0 0 10px">
+                  Read from the same table every request is checked against, so this is what
+                  actually happens — not a description of it.
+                </p>
+
+                <div style="overflow-x:auto">
+                  <table class="perm">
+                    <thead>
+                      <tr>
+                        <th>Can…</th>
+                        <th :for={role <- roles()}>{role_label(role)}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr :for={{label, permission} <- permission_rows()}>
+                        <td>{label}</td>
+                        <td :for={role <- roles()}>
+                          <span :if={holds?(role, permission)} class="ok">✓</span>
+                          <span :if={not holds?(role, permission)} class="no">—</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            <% _plan -> %>
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Your plan</h3>
+                  <span class="spacer"></span>
+                  <span :if={@usage} class="pill">{@usage.plan.name}</span>
+                </div>
+
+                <p style="color:var(--muted);font-size:13px;margin:0 0 10px">
+                  {subscription_line(@current_scope, @subscription)}
+                </p>
+
+                <div :if={@usage} class="list">
+                  <div :for={meter <- @usage.meters} class="it">
+                    <span style="flex:1;min-width:0">
+                      <b>{meter_label(meter.key)}</b>
+                      <span class="sub">{meter_usage(meter)}</span>
+                    </span>
+                    <span :if={meter.limit != :unlimited} class="prog" style="width:140px">
+                      <span class="bar">
+                        <i class={meter_tone(meter)} style={"width:#{meter_fill(meter)}"}></i>
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                <.empty
+                  :if={is_nil(@usage)}
+                  title="No subscription yet"
+                  body="A studio without a plan cannot create anything, because every limit check reads the plan."
+                />
+              </div>
+
+              <div :if={@plans != []} class="panel">
+                <div class="ph-head">
+                  <h3>Change plan</h3>
+                </div>
+                <div class="list">
+                  <div :for={plan <- @plans} class="it">
+                    <span style="flex:1;min-width:0">
+                      <b>{plan.name}</b>
+                      <span class="sub">{plan.tagline}</span>
+                    </span>
+                    <span class="t">
+                      {plan_price(
+                        plan,
+                        (@subscription && @subscription.billing_period) || "monthly"
+                      )}
+                    </span>
+                    <span
+                      :if={@usage && @usage.plan.id == plan.id}
+                      class="pill ok"
+                    >
+                      Current
+                    </span>
+                    <button
+                      :if={!(@usage && @usage.plan.id == plan.id)}
+                      class="btn sm"
+                      phx-click="change-plan"
+                      phx-value-plan={plan.key}
+                    >
+                      Move to {plan.name}
+                    </button>
+                  </div>
+                </div>
+
+                <div :if={@subscription} class="form-actions">
+                  <button
+                    :if={not @subscription.cancel_at_period_end}
+                    class="btn ghost"
+                    phx-click="cancel-plan"
+                    data-confirm="Cancel the subscription? You keep everything until the period ends."
+                  >
+                    Cancel the subscription
+                  </button>
+                  <button
+                    :if={@subscription.cancel_at_period_end}
+                    class="btn primary"
+                    phx-click="resume-plan"
+                  >
+                    Resume the subscription
+                  </button>
+                </div>
+              </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layouts.app>

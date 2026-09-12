@@ -18,61 +18,7 @@ defmodule AperDeskWeb.SetupLive do
   alias AperDesk.Accounts.Studio
   alias AperDesk.Formats
   alias AperDesk.Money
-
-  # A curated list rather than the full IANA set: a 400-entry dropdown is worse
-  # than 30 that cover where photographers actually work, and the browser's own
-  # zone is added on connect if it is missing.
-  @time_zones [
-    "Etc/UTC",
-    "Europe/London",
-    "Europe/Dublin",
-    "Europe/Lisbon",
-    "Europe/Madrid",
-    "Europe/Paris",
-    "Europe/Amsterdam",
-    "Europe/Brussels",
-    "Europe/Zurich",
-    "Europe/Berlin",
-    "Europe/Vienna",
-    "Europe/Rome",
-    "Europe/Stockholm",
-    "Europe/Oslo",
-    "Europe/Copenhagen",
-    "Europe/Warsaw",
-    "Europe/Prague",
-    "Europe/Athens",
-    "Europe/Istanbul",
-    "Europe/Moscow",
-    "Asia/Dubai",
-    "Asia/Karachi",
-    "Asia/Kolkata",
-    "Asia/Colombo",
-    "Asia/Dhaka",
-    "Asia/Bangkok",
-    "Asia/Singapore",
-    "Asia/Hong_Kong",
-    "Asia/Shanghai",
-    "Asia/Tokyo",
-    "Asia/Seoul",
-    "Australia/Perth",
-    "Australia/Adelaide",
-    "Australia/Sydney",
-    "Pacific/Auckland",
-    "America/New_York",
-    "America/Toronto",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "America/Vancouver",
-    "America/Mexico_City",
-    "America/Bogota",
-    "America/Sao_Paulo",
-    "America/Argentina/Buenos_Aires",
-    "Africa/Casablanca",
-    "Africa/Lagos",
-    "Africa/Nairobi",
-    "Africa/Johannesburg"
-  ]
+  alias AperDeskWeb.StudioOptions
 
   @impl true
   def mount(_params, _session, socket) do
@@ -162,11 +108,7 @@ defmodule AperDeskWeb.SetupLive do
     })
   end
 
-  defp zones_including(nil), do: @time_zones
-
-  defp zones_including(zone) do
-    if zone in @time_zones, do: @time_zones, else: Enum.sort([zone | @time_zones])
-  end
+  defp zones_including(zone), do: StudioOptions.time_zones(zone)
 
   defp valid_zone?(zone) when is_binary(zone) do
     match?({:ok, _}, DateTime.now(zone))
@@ -175,25 +117,8 @@ defmodule AperDeskWeb.SetupLive do
   defp valid_zone?(_zone), do: false
 
   @doc "How each date format reads, so the choice is not an abbreviation."
-  def date_format_label("dmy"), do: "Day first — 10/09/2026"
-  def date_format_label("mdy"), do: "Month first — 09/10/2026"
-  def date_format_label("iso"), do: "ISO — 2026-09-10"
-  def date_format_label("long"), do: "Written — 10 Sep 2026"
-
-  def time_format_label("12h"), do: "12-hour — 2:30 pm"
-  def time_format_label("24h"), do: "24-hour — 14:30"
-
-  def week_start_label("monday"), do: "Monday"
-  def week_start_label("sunday"), do: "Sunday"
-
-  @doc "Reply-time targets, in minutes."
-  def sla_options do
-    [
-      {"Within 1 hour", 60},
-      {"Within 4 hours", 240},
-      {"Within 12 hours", 720},
-      {"Within 24 hours", 1440},
-      {"Within 2 days", 2880}
-    ]
-  end
+  defdelegate date_format_label(value), to: StudioOptions
+  defdelegate time_format_label(value), to: StudioOptions
+  defdelegate week_start_label(value), to: StudioOptions
+  defdelegate sla_options, to: StudioOptions
 end

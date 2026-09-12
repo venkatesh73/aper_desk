@@ -391,3 +391,7 @@ input.invalid,select.invalid,textarea.invalid{border-color:var(--bad)}
 .formprev h2 { font-family: Fraunces, Georgia, serif; font-weight: 400; font-size: 22px; }
 .formprev .form { margin-top: 14px; }
 .hint-line { font-size: 11.5px; color: var(--faint); }
+
+/* design.css styles ok and warn fills but not bad. A meter that is over its
+   limit is exactly the one that has to look wrong. */
+.prog .bar i.bad { background: var(--bad); }

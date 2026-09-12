@@ -105,6 +105,29 @@ defmodule AperDesk.Authorization do
     end
   end
 
+  @doc """
+  Every role, in the order a permissions table should read them.
+
+  Owner first because it is the superset, then the four that are genuinely
+  different from each other.
+  """
+  def roles, do: [:owner, :photographer, :finance, :hr, :ops]
+
+  @doc """
+  Whether `role` holds `permission`, without needing a `%Scope{}`.
+
+  This is what lets the settings screen draw the permission matrix from the
+  same table the contexts are checked against, rather than from a hand-written
+  copy that would be wrong the first time a permission moved.
+  """
+  def holds?(role, permission) when is_atom(role) and is_atom(permission) do
+    case Map.get(@permissions, role) do
+      :all -> true
+      nil -> false
+      permissions -> permission in permissions
+    end
+  end
+
   @doc "Whether the scope owns the studio it is acting in."
   def owner?(%Scope{role: :owner}), do: true
   def owner?(%Scope{}), do: false
