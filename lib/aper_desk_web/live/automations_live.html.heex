@@ -176,22 +176,14 @@
                 </.field>
 
                 <.field label="Wait before sending">
-                  <select name="workflow[delay_minutes]">
-                    <option
-                      :for={
-                        {label, minutes} <- [
-                          {"Straight away", 0},
-                          {"After 1 hour", 60},
-                          {"After 1 day", 1440},
-                          {"After 3 days", 4320}
-                        ]
-                      }
-                      value={minutes}
-                      selected={to_string(minutes) == @step["delay_minutes"]}
-                    >
-                      {label}
-                    </option>
-                  </select>
+                  <.live_component
+                    module={AperDeskWeb.Combobox}
+                    id="step-delay"
+                    name="workflow[delay_minutes]"
+                    value={@step["delay_minutes"] || "0"}
+                    options={delay_options()}
+                    allow_clear={false}
+                  />
                 </.field>
               </.section>
 
@@ -200,14 +192,14 @@
                   label="Approval"
                   hint="Asking first is the default, because your studio's name is on every message."
                 >
-                  <select name="workflow[approval_mode]">
-                    <option value="ask" selected={@form[:approval_mode].value in [nil, "ask"]}>
-                      Ask me first
-                    </option>
-                    <option value="auto" selected={@form[:approval_mode].value == "auto"}>
-                      Let it send on its own
-                    </option>
-                  </select>
+                  <.live_component
+                    module={AperDeskWeb.Combobox}
+                    id="approval-mode"
+                    name="workflow[approval_mode]"
+                    value={@form[:approval_mode].value || "ask"}
+                    options={approval_options()}
+                    allow_clear={false}
+                  />
                 </.field>
               </.section>
 

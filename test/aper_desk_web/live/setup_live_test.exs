@@ -30,19 +30,11 @@ defmodule AperDeskWeb.SetupLiveTest do
 
   # The time zone is chosen through the combobox, so it is not in the form
   # params. The changeset-level tests add it back explicitly.
+  # Only the typed fields. Every dropdown on this form is a combobox writing to
+  # a hidden input, and `LiveViewTest` refuses to set those on purpose — so the
+  # dropdowns are chosen with `choose/3`, which is what a person does.
   defp valid_setup(overrides \\ %{}) do
-    Map.merge(
-      %{
-        "city" => "Zurich",
-        "country_code" => "CH",
-        "base_currency" => "EUR",
-        "date_format" => "dmy",
-        "time_format" => "24h",
-        "week_starts_on" => "monday",
-        "reply_sla_minutes" => "240"
-      },
-      overrides
-    )
+    Map.merge(%{"city" => "Zurich", "country_code" => "CH"}, overrides)
   end
 
   describe "the gate" do
@@ -94,7 +86,9 @@ defmodule AperDeskWeb.SetupLiveTest do
 
     test "saves the answers and lets the app through", %{conn: conn, studio: studio} do
       {:ok, view, _html} = live(conn, ~p"/app/setup")
+
       choose(view, "setup-time-zone", "Europe/Zurich")
+      choose(view, "setup_base_currency", "EUR")
 
       assert {:error, {:live_redirect, %{to: "/app"}}} =
                view |> form("form", setup: valid_setup()) |> render_submit()
@@ -118,14 +112,11 @@ defmodule AperDeskWeb.SetupLiveTest do
       {:ok, view, _html} = live(conn, ~p"/app/setup")
       choose(view, "setup-time-zone", "Europe/Zurich")
 
-      dmy = view |> form("form", setup: valid_setup(%{"date_format" => "dmy"})) |> render_change()
-      assert dmy =~ "10/09/2026"
-
-      mdy = view |> form("form", setup: valid_setup(%{"date_format" => "mdy"})) |> render_change()
-      assert mdy =~ "09/10/2026"
-
-      iso = view |> form("form", setup: valid_setup(%{"date_format" => "iso"})) |> render_change()
-      assert iso =~ "2026-09-10"
+      # Chosen through the control rather than posted as a param, so the sample
+      # is being driven by the same path a person drives it by.
+      assert choose(view, "setup_date_format", "Day first") =~ "10/09/2026"
+      assert choose(view, "setup_date_format", "Month first") =~ "09/10/2026"
+      assert choose(view, "setup_date_format", "ISO") =~ "2026-09-10"
     end
 
     test "accepts the browser's time zone when nothing has been chosen", %{conn: conn} do

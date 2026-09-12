@@ -41,6 +41,11 @@
                   required={required?(field)}
                 >{value_for(@answers, field)}</textarea>
               <% "select" -> %>
+                <%!-- The one native select left in the product, deliberately.
+                Everywhere a studio works is the combobox; this page is filled
+                in by a stranger on their phone, where the OS wheel picker beats
+                any custom panel, and it still submits if the socket drops. A
+                dropdown the client cannot use is a lead that never arrives. --%>
                 <select name={"answers[#{field["key"]}]"} required={required?(field)}>
                   <option value="">Choose one</option>
                   <option

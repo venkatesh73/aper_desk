@@ -189,15 +189,14 @@
               </.field>
 
               <.field label="What they can see">
-                <select name="invitation[role]">
-                  <option
-                    :for={{label, value} <- role_options()}
-                    value={value}
-                    selected={value == @invite_form.params["role"]}
-                  >
-                    {label}
-                  </option>
-                </select>
+                <.live_component
+                  module={AperDeskWeb.Combobox}
+                  id="invite-role"
+                  name="invitation[role]"
+                  value={@invite_form.params["role"] || "photographer"}
+                  options={role_options()}
+                  allow_clear={false}
+                />
                 <.errors field={@invite_form[:role]} />
               </.field>
 
@@ -321,17 +320,25 @@
           </div>
           <.form for={to_form(%{}, as: :leave)} phx-submit="request-leave" class="form">
             <.field :if={can?(@current_scope, :"leave.approve")} label="Who is away">
-              <select name="leave[user_id]">
-                <option :for={member <- @members} value={member.user_id}>
-                  {member_name(member)}
-                </option>
-              </select>
+              <.live_component
+                module={AperDeskWeb.Combobox}
+                id="leave-person"
+                name="leave[user_id]"
+                value={@current_scope.user.id}
+                options={Enum.map(@members, &{member_name(&1), &1.user_id})}
+                allow_clear={false}
+              />
             </.field>
 
             <.field label="What kind">
-              <select name="leave[kind]">
-                <option :for={{label, value} <- leave_kinds()} value={value}>{label}</option>
-              </select>
+              <.live_component
+                module={AperDeskWeb.Combobox}
+                id="leave-kind"
+                name="leave[kind]"
+                value="holiday"
+                options={leave_kinds()}
+                allow_clear={false}
+              />
             </.field>
 
             <.row layout="two">

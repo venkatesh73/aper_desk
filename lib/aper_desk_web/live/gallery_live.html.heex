@@ -131,23 +131,13 @@
           >
             <span class="eyebrow">{length(@visible)} shown</span>
             <span class="spacer"></span>
-            <select
-              :if={@visible != []}
-              phx-change="cover"
-              name="id"
-              style="width:auto;padding:4px 8px;font-size:12.5px"
-            >
-              <option value="">Set the cover…</option>
-              <option :for={media <- @visible} value={media.id}>{media.filename}</option>
-            </select>
-            <select
-              phx-change="remove"
-              name="id"
-              style="width:auto;padding:4px 8px;font-size:12.5px"
-            >
-              <option value="">Remove a photo…</option>
-              <option :for={media <- @visible} value={media.id}>{media.filename}</option>
-            </select>
+            <%!-- Setting the cover and removing a frame used to be two dropdowns
+            of filenames here. Choosing a photograph by its filename is a worse
+            way to pick a photograph than looking at it, and the preview does
+            both on the frame you are already looking at. --%>
+            <span style="font-size:11.5px;color:var(--faint)">
+              Click a frame to see it, set it as the cover, or remove it
+            </span>
           </div>
 
           <.modal

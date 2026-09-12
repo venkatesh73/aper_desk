@@ -39,12 +39,16 @@
               label="Start from a template"
               hint="Fills in the terms. Anything already priced stays."
             >
-              <select phx-change="use-template" name="id">
-                <option value="">Choose one…</option>
-                <option :for={{label, id} <- template_options(@templates)} value={id}>
-                  {label}
-                </option>
-              </select>
+              <.live_component
+                module={AperDeskWeb.Combobox}
+                id="invoice-template"
+                name="invoice_template_id"
+                value={nil}
+                options={template_options(@templates)}
+                prompt="Choose one…"
+                search_placeholder="Search templates"
+                on_select="use-template"
+              />
             </.field>
 
             <.section title="Who and what">
@@ -233,15 +237,14 @@
                 />
               </.field>
               <.field label="How it arrived">
-                <select name="payment[method]">
-                  <option
-                    :for={{label, value} <- method_options()}
-                    value={value}
-                    selected={value == @payment_method}
-                  >
-                    {label}
-                  </option>
-                </select>
+                <.live_component
+                  module={AperDeskWeb.Combobox}
+                  id="payment-method"
+                  name="payment[method]"
+                  value={@payment_method}
+                  options={method_options()}
+                  allow_clear={false}
+                />
               </.field>
               <.field label="Note">
                 <input type="text" name="payment[note]" placeholder="Bank ref, or who paid" />

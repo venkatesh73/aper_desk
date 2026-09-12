@@ -33,6 +33,12 @@ defmodule AperDeskWeb.Combobox do
 
   use AperDeskWeb, :live_component
 
+  # Below this many options the search box is more friction than help: you can
+  # read five things faster than you can type. Above it, scanning stops being
+  # reasonable and the box earns its place. The component is the same either
+  # way, so every dropdown in the product looks and keys alike.
+  @search_threshold 7
+
   @doc false
   @impl true
   def mount(socket) do
@@ -49,6 +55,8 @@ defmodule AperDeskWeb.Combobox do
      |> assign_new(:empty_message, fn -> "Nothing matched" end)
      |> assign_new(:allow_clear, fn -> true end)
      |> assign_new(:required, fn -> false end)
+     |> assign_new(:search_threshold, fn -> @search_threshold end)
+     |> assign_new(:on_select, fn -> nil end)
      |> normalise_options()}
   end
 
@@ -115,6 +123,7 @@ defmodule AperDeskWeb.Combobox do
       assigns
       |> assign(:matches, filtered(assigns))
       |> assign(:selected, selected(assigns))
+      |> assign(:searchable, length(assigns.options) >= assigns.search_threshold)
 
     ~H"""
     <div
@@ -141,7 +150,7 @@ defmodule AperDeskWeb.Combobox do
       </button>
 
       <div :if={@open} class="combo-panel" role="listbox">
-        <div class="combo-search">
+        <div :if={@searchable} class="combo-search">
           <input
             type="text"
             id={"#{@id}-search"}
@@ -225,10 +234,14 @@ defmodule AperDeskWeb.Combobox do
 
   # Tells the parent LiveView the value changed, so a form relying on
   # `phx-change` still sees it — a hidden input's value does not trigger one.
+  # A message to the parent LiveView, not to the browser. `push_event/3` sends
+  # to client JS, which cannot run a server-side action — so a combobox wired
+  # to "apply this template" did nothing at all. The parent handles
+  # `{:combobox, event, value}` in `handle_info/2`.
   defp notify_parent(socket, value) do
     case socket.assigns[:on_select] do
       nil -> socket
-      event when is_binary(event) -> push_event(socket, event, %{value: value})
+      event when is_binary(event) -> send(self(), {:combobox, event, value}) && socket
       _ -> socket
     end
   end

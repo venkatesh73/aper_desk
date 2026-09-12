@@ -231,29 +231,45 @@
 
               <.form for={to_form(%{}, as: :checkout)} phx-submit="check-out" class="form">
                 <.field label="What">
-                  <select name="checkout[gear_item_id]" required>
-                    <option :for={item <- @available} value={item.id}>
-                      {item.name} · {String.capitalize(item.category)}
-                    </option>
-                  </select>
+                  <.live_component
+                    module={AperDeskWeb.Combobox}
+                    id="checkout-item"
+                    name="checkout[gear_item_id]"
+                    value={@available != [] && hd(@available).id}
+                    options={
+                      Enum.map(@available, &{&1.name, &1.id, String.capitalize(&1.category)})
+                    }
+                    prompt="Nothing available"
+                    search_placeholder="Search the kit"
+                    allow_clear={false}
+                  />
                   <span :if={@available == []} class="hint-line">
                     Everything is already out.
                   </span>
                 </.field>
 
                 <.field label="Who is taking it">
-                  <select name="checkout[user_id]">
-                    <option :for={{name, id} <- member_options(@members)} value={id}>
-                      {name}
-                    </option>
-                  </select>
+                  <.live_component
+                    module={AperDeskWeb.Combobox}
+                    id="checkout-person"
+                    name="checkout[user_id]"
+                    value={@current_scope.user.id}
+                    options={member_options(@members)}
+                    search_placeholder="Search the team"
+                    allow_clear={false}
+                  />
                 </.field>
 
                 <.field label="What for">
-                  <select name="checkout[job_id]">
-                    <option value="">Not for a particular shoot</option>
-                    <option :for={{title, id} <- job_options(@jobs)} value={id}>{title}</option>
-                  </select>
+                  <.live_component
+                    module={AperDeskWeb.Combobox}
+                    id="checkout-job"
+                    name="checkout[job_id]"
+                    value={nil}
+                    options={job_options(@jobs)}
+                    prompt="Not for a particular shoot"
+                    search_placeholder="Search shoots"
+                  />
                 </.field>
 
                 <.field label="Back by">
@@ -278,11 +294,14 @@
                 </.field>
                 <.row layout="two">
                   <.field label="Kind">
-                    <select name="gear[category]">
-                      <option :for={{label, value} <- gear_categories()} value={value}>
-                        {label}
-                      </option>
-                    </select>
+                    <.live_component
+                      module={AperDeskWeb.Combobox}
+                      id="gear-category"
+                      name="gear[category]"
+                      value="other"
+                      options={gear_categories()}
+                      allow_clear={false}
+                    />
                   </.field>
                   <.field label="Serial">
                     <input type="text" name="gear[serial]" placeholder="Optional" />

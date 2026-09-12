@@ -328,15 +328,16 @@
                     placeholder="What are you asking?"
                     class="qlabel"
                   />
-                  <select name={"template[questions][#{index}][type]"} class="qtype">
-                    <option
-                      :for={{label, value} <- question_types()}
-                      value={value}
-                      selected={value == question["type"]}
-                    >
-                      {label}
-                    </option>
-                  </select>
+                  <div class="qtype">
+                    <.live_component
+                      module={AperDeskWeb.Combobox}
+                      id={"question-type-#{index}"}
+                      name={"template[questions][#{index}][type]"}
+                      value={question["type"]}
+                      options={question_types()}
+                      allow_clear={false}
+                    />
+                  </div>
 
                   <button
                     type="button"
@@ -596,6 +597,9 @@
                     <% "textarea" -> %>
                       <textarea rows="3" disabled placeholder={field["placeholder"]}></textarea>
                     <% "select" -> %>
+                      <%!-- Native, to match the public form exactly. A preview
+                      that showed a combobox would be showing the studio a
+                      control their client never sees. --%>
                       <select disabled>
                         <option>Choose one</option>
                         <option :for={option <- field_options(field)}>{option}</option>

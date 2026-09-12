@@ -91,10 +91,21 @@ defmodule AperDeskWeb.FormComponents do
   end
 
   @doc """
-  A native select inside a labelled field.
+  A dropdown inside a labelled field.
 
-  For anything a person might have to search — a contact, a package — use
-  `AperDeskWeb.Combobox` instead. A native select cannot be filtered.
+  Renders `AperDeskWeb.Combobox`, not a native `<select>`. Every dropdown in
+  the product is therefore the same control: the same look in both themes, the
+  same keyboard model, and search wherever the list is long enough to need it
+  — the combobox decides that from the option count rather than each call site
+  guessing.
+
+  A native select cannot be styled consistently across platforms, cannot be
+  filtered, and cannot show a second line of detail under an option. Having two
+  kinds of dropdown meant every new screen picked one by coin toss, and the
+  answer drifted by screen rather than by list length.
+
+  The API is unchanged from when this rendered a `<select>`, so call sites did
+  not move.
   """
   attr :field, Phoenix.HTML.FormField, required: true
   attr :label, :string, default: nil
@@ -104,20 +115,22 @@ defmodule AperDeskWeb.FormComponents do
   attr :rest, :global, include: ~w(required)
 
   def select_field(assigns) do
-    assigns = assign_new(assigns, :id, fn -> assigns.field.id end)
+    assigns =
+      assigns
+      |> assign_new(:id, fn -> assigns.field.id end)
+      |> assign(:options, normalise_options(assigns.options))
 
     ~H"""
     <.field label={@label} for={@id} hint={@hint} field={@field}>
-      <select id={@id} name={@field.name} class={invalid(@field)} {@rest}>
-        <option :if={@prompt} value="">{@prompt}</option>
-        <option
-          :for={{label, value} <- normalise_options(@options)}
-          value={value}
-          selected={to_string(value) == to_string(normalise(@field.value))}
-        >
-          {label}
-        </option>
-      </select>
+      <.live_component
+        module={AperDeskWeb.Combobox}
+        id={@id}
+        name={@field.name}
+        value={normalise(@field.value)}
+        options={@options}
+        prompt={@prompt || "Choose one"}
+        allow_clear={not is_nil(@prompt)}
+      />
     </.field>
     """
   end

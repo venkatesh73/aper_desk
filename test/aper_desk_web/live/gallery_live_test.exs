@@ -87,7 +87,9 @@ defmodule AperDeskWeb.GalleryLiveTest do
       path = Path.join("tmp/test_uploads", media.storage_key)
       assert File.exists?(path)
 
-      render_change(element(view, "select[phx-change='remove']"), %{"id" => media.id})
+      # Removing happens from the preview, on the frame you are looking at.
+      view |> element("div[phx-value-id='#{media.id}']") |> render_click()
+      view |> element("#gallery-preview button[phx-click*='remove']") |> render_click()
 
       assert Galleries.list_media(scope, gallery.id) == []
       refute File.exists?(path)

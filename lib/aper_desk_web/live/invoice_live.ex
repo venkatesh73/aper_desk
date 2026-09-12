@@ -120,29 +120,6 @@ defmodule AperDeskWeb.InvoiceLive do
   # Fills in terms rather than replacing the invoice: whatever has already been
   # typed into the lines stays, because a studio picking a template halfway
   # through pricing meant "use these terms", not "start again".
-  def handle_event("use-template", %{"id" => ""}, socket), do: {:noreply, socket}
-
-  def handle_event("use-template", %{"id" => id}, socket) do
-    scope = socket.assigns.current_scope
-
-    case Finance.fetch_invoice_template(scope, id) do
-      {:ok, template} ->
-        params =
-          socket
-          |> current_params()
-          |> Map.merge(InvoiceTemplate.to_invoice_attrs(template, Formats.today_for(scope)))
-          |> put_tax(template, socket)
-
-        {:noreply,
-         socket
-         |> rebuild(params)
-         |> put_flash(:info, "#{template.name} applied.")}
-
-      _ ->
-        {:noreply, put_flash(socket, :error, "That template is not here.")}
-    end
-  end
-
   def handle_event("add-line", _params, socket) do
     params = current_params(socket)
     lines = params |> Map.get("line_items", %{}) |> Map.new()
@@ -222,6 +199,39 @@ defmodule AperDeskWeb.InvoiceLive do
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Could not record it: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  # The combobox is a LiveComponent, so a choice arrives here rather than as a
+  # form event. `push_event/3` would have gone to the browser, which cannot run
+  # a server-side action.
+  def handle_info({:combobox, "use-template", value}, socket),
+    do: apply_template(socket, value)
+
+  def handle_info(_message, socket), do: {:noreply, socket}
+
+  defp apply_template(socket, nil), do: {:noreply, socket}
+  defp apply_template(socket, ""), do: {:noreply, socket}
+
+  defp apply_template(socket, id) do
+    scope = socket.assigns.current_scope
+
+    case Finance.fetch_invoice_template(scope, id) do
+      {:ok, template} ->
+        params =
+          socket
+          |> current_params()
+          |> Map.merge(InvoiceTemplate.to_invoice_attrs(template, Formats.today_for(scope)))
+          |> put_tax(template, socket)
+
+        {:noreply,
+         socket
+         |> rebuild(params)
+         |> put_flash(:info, "#{template.name} applied.")}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "That template is not here.")}
     end
   end
 

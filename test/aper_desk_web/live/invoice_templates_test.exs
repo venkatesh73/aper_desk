@@ -9,6 +9,7 @@ defmodule AperDeskWeb.InvoiceTemplatesTest do
   use AperDeskWeb.ConnCase, async: true
 
   import AperDesk.Fixtures
+  import AperDeskWeb.ComboboxHelpers
   import Phoenix.LiveViewTest
 
   alias AperDesk.Accounts
@@ -168,10 +169,8 @@ defmodule AperDeskWeb.InvoiceTemplatesTest do
         }
       })
 
-      html =
-        view
-        |> element("select[phx-change='use-template']")
-        |> render_change(%{"id" => template.id})
+      # Chosen through the combobox, which is what the studio clicks.
+      html = choose_and_settle(view, "invoice-template", "Wedding deposit")
 
       assert html =~ "Wedding deposit applied"
       # The line the studio already typed survives.
@@ -188,9 +187,7 @@ defmodule AperDeskWeb.InvoiceTemplatesTest do
       template = template_fixture(scope)
       {:ok, view, _html} = live(conn, ~p"/app/finance/invoices/new")
 
-      view
-      |> element("select[phx-change='use-template']")
-      |> render_change(%{"id" => template.id})
+      choose(view, "invoice-template", template.name)
 
       # Picking terms is not raising an invoice.
       assert {:ok, []} = Finance.list_invoices(scope)

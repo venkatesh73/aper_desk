@@ -27,8 +27,20 @@ defmodule AperDeskWeb.ComboboxTest do
     %{user: user, studio: studio, scope: scope} = studio_fixture()
     plan_fixture(studio)
 
+    # Enough to be worth searching. Below the component's threshold the search
+    # box is deliberately absent — you read seven things faster than you type —
+    # so a four-contact studio would be testing the wrong branch.
     contacts =
-      for name <- ["Anna Bell", "Tom Brunner", "Priya Nair", "Kessler AG"],
+      for name <- [
+            "Anna Bell",
+            "Tom Brunner",
+            "Priya Nair",
+            "Kessler AG",
+            "Carla Mendes",
+            "Nuno Pereira",
+            "Sofie Jansen",
+            "Bela Family"
+          ],
           do: contact_fixture(scope, %{"name" => name})
 
     %{conn: sign_in(conn, user, studio), scope: scope, contacts: contacts}
@@ -159,6 +171,27 @@ defmodule AperDeskWeb.ComboboxTest do
     test "there is nothing to clear before anything is chosen", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/app/leads/new")
       refute open(view) =~ "combo-clear"
+    end
+  end
+
+  describe "the search box" do
+    test "is absent while the list is short enough to read", %{conn: conn, scope: scope} do
+      # A studio with three packages does not need to filter three packages,
+      # and a search box over three options is friction rather than help.
+      {:ok, view, _html} = live(conn, ~p"/app/packages/new")
+      view |> element("#package-shoot-type .combo-button") |> render_click()
+
+      html = render(view)
+      assert html =~ "combo-option"
+      assert scope
+    end
+
+    test "appears once the list is long enough to need it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/app/leads/new")
+      open(view)
+
+      # Eight contacts, so the box is there.
+      assert has_element?(view, "#lead-contact-search")
     end
   end
 end

@@ -240,6 +240,20 @@ defmodule AperDeskWeb.AutomationsLive do
 
   def trigger_events, do: Workflow.trigger_events()
 
+  @doc "How long a step waits, in the words a studio would use."
+  def delay_options do
+    [
+      {"Straight away", "0"},
+      {"After 1 hour", "60"},
+      {"After 1 day", "1440"},
+      {"After 3 days", "4320"}
+    ]
+  end
+
+  @doc "Whether a step sends on its own. Asking first is the default."
+  def approval_options,
+    do: [{"Ask me first", "ask"}, {"Let it send on its own", "auto"}]
+
   def humanise(nil), do: "Any"
   def humanise(""), do: "Any"
 
