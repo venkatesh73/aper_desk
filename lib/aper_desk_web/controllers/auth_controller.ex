@@ -193,6 +193,13 @@ defmodule AperDeskWeb.AuthController do
   defp invitation_error(:invalid_token), do: "This link does not open anything."
   defp invitation_error(:not_found), do: "This link does not open anything."
 
+  defp invitation_error({:limit_reached, "seats", used, limit}),
+    do:
+      "This studio's plan allows #{limit} #{if limit == 1, do: "person", else: "people"} and #{used} #{if used == 1, do: "has", else: "have"} joined. Ask them to move up a plan, then open this link again."
+
+  defp invitation_error({:limit_reached, _key, _used, _limit}),
+    do: "This studio is at its plan's limit. Ask them to move up a plan."
+
   defp invitation_error(%Ecto.Changeset{}),
     do: "You are already a member of this studio."
 

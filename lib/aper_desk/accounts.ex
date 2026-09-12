@@ -547,6 +547,17 @@ defmodule AperDesk.Accounts do
 
   defp do_accept(invitation, user) do
     Multi.new()
+    # The seat is claimed under a row lock in the same transaction as the
+    # insert, exactly as every other plan limit is. Two people accepting the
+    # last seat at the same moment would otherwise both read "one free" and
+    # both get in, and a studio silently over its plan is a bill nobody
+    # authorised.
+    |> Multi.run(:seat, fn repo, _changes ->
+      case AperDesk.Billing.Limits.ensure_headroom(repo, seat_scope(invitation), "seats") do
+        :ok -> {:ok, :within_limit}
+        error -> error
+      end
+    end)
     |> Multi.insert(
       :membership,
       Membership.changeset(%Membership{}, %{
@@ -560,8 +571,16 @@ defmodule AperDesk.Accounts do
     |> Repo.transaction()
     |> case do
       {:ok, %{membership: membership}} -> {:ok, membership}
+      {:error, :seat, reason, _changes} -> {:error, reason}
       {:error, _step, changeset, _changes} -> {:error, changeset}
     end
+  end
+
+  # `ensure_headroom/4` reads the studio from a scope, and there is no user
+  # scope here — the person accepting is not a member yet, which is the whole
+  # point. A studio-only scope is what the check actually needs.
+  defp seat_scope(%UserInvitation{studio_id: studio_id}) do
+    %Scope{studio: %Studio{id: studio_id}}
   end
 
   @doc """
