@@ -32,12 +32,22 @@ defmodule AperDesk.Storage do
   @doc "Remove everything under a prefix, for purging a whole gallery."
   @callback delete_prefix(prefix :: String.t()) :: :ok | {:error, term}
 
+  @doc """
+  Copy an object down to a local path, for work that needs the bytes.
+
+  Deriving a thumbnail from a 40 MB frame means having the frame. Streamed to
+  disk rather than returned as a binary: a worker holding several originals in
+  memory at once is how a box runs out of it.
+  """
+  @callback fetch(key, dest_path :: Path.t()) :: {:ok, Path.t()} | {:error, term}
+
   @doc "A URL a browser can fetch the object from."
   @callback url(key) :: String.t()
 
   def put(key, source_path, opts \\ []), do: adapter().put(key, source_path, opts)
   def delete(key), do: adapter().delete(key)
   def delete_prefix(prefix), do: adapter().delete_prefix(prefix)
+  def fetch(key, dest_path), do: adapter().fetch(key, dest_path)
   def url(nil), do: nil
   def url(key), do: adapter().url(key)
 

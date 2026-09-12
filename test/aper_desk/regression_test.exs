@@ -117,7 +117,7 @@ defmodule AperDesk.RegressionTest do
     end
 
     test "a real user with no permission is still refused" do
-      %{studio: studio, scope: scope} = studio_fixture()
+      %{studio: studio} = studio_fixture()
       plan_fixture(studio)
 
       hr = crew(studio, "hr")

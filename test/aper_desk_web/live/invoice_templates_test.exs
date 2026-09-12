@@ -145,7 +145,7 @@ defmodule AperDeskWeb.InvoiceTemplatesTest do
 
   describe "raising an invoice from one" do
     test "fills in the terms and leaves the pricing alone", %{conn: conn, scope: scope} do
-      template =
+      _template =
         template_fixture(scope, %{
           "name" => "Wedding deposit",
           "kind" => "deposit",

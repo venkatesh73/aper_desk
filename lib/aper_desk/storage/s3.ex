@@ -54,6 +54,19 @@ defmodule AperDesk.Storage.S3 do
   end
 
   @impl true
+  def fetch(key, dest_path) do
+    File.mkdir_p!(Path.dirname(dest_path))
+
+    bucket()
+    |> ExAws.S3.download_file(key, dest_path)
+    |> ExAws.request()
+    |> case do
+      {:ok, _response} -> {:ok, dest_path}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @impl true
   def url(key), do: Path.join(public_base_url(), key)
 
   defp bucket, do: Keyword.fetch!(Storage.config(), :bucket)

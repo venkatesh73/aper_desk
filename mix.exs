@@ -93,6 +93,13 @@ defmodule AperDesk.MixProject do
       {:finch, "~> 0.19"},
       {:req, "~> 0.5"},
 
+      # --- Image processing (gallery derivatives and watermarks) ---
+      # libvips rather than ImageMagick: it streams rather than decoding the
+      # whole frame into memory, which is what makes resizing a 50 MB raw
+      # affordable on a web box. `vix` ships precompiled NIFs, so there is no
+      # system package to install on a deploy target.
+      {:image, "~> 0.62"},
+
       # --- Object storage (galleries) ---
       {:ex_aws, "~> 2.5"},
       {:ex_aws_s3, "~> 2.5"},

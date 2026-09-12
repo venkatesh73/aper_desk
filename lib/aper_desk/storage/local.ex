@@ -41,6 +41,17 @@ defmodule AperDesk.Storage.Local do
   end
 
   @impl true
+  def fetch(key, dest_path) do
+    with {:ok, source} <- resolve(key),
+         :ok <- File.mkdir_p(Path.dirname(dest_path)),
+         {:ok, _bytes} <- File.copy(source, dest_path) do
+      {:ok, dest_path}
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @impl true
   def url(key), do: Path.join(public_base_url(), key)
 
   # `File.cp/2` rather than `File.rename/2`: LiveView's temporary file may sit

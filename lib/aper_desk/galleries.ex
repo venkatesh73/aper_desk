@@ -19,6 +19,7 @@ defmodule AperDesk.Galleries do
   alias AperDesk.Events
 
   alias AperDesk.Galleries.Notifier
+  alias AperDesk.Galleries.Workers.DeriveMediaWorker
 
   alias AperDesk.Galleries.{
     Gallery,
@@ -82,9 +83,26 @@ defmodule AperDesk.Galleries do
   @doc "Update a gallery's title, description and delivery settings."
   def update_gallery(%Scope{} = scope, id, attrs) do
     with :ok <- Authorization.authorize(scope, :"gallery.write"),
-         {:ok, gallery} <- Scoped.fetch(Gallery, scope, id) do
-      gallery |> Gallery.changeset(attrs) |> Repo.update()
+         {:ok, gallery} <- Scoped.fetch(Gallery, scope, id),
+         {:ok, updated} <- gallery |> Gallery.changeset(attrs) |> Repo.update() do
+      # The watermark is burned into the preview, so changing the setting is a
+      # request to rebuild every preview in the gallery. Doing nothing here is
+      # what would make the toggle a lie for everything already uploaded.
+      if updated.watermark_enabled != gallery.watermark_enabled do
+        rederive(updated)
+      end
+
+      {:ok, updated}
     end
+  end
+
+  @doc "Queue every frame in a gallery for fresh derivatives."
+  def rederive(%Gallery{} = gallery) do
+    GalleryMedia
+    |> where([m], m.gallery_id == ^gallery.id)
+    |> select([m], m.id)
+    |> Repo.all()
+    |> Enum.each(&Oban.insert(DeriveMediaWorker.enqueue(&1)))
   end
 
   @doc """
@@ -113,6 +131,12 @@ defmodule AperDesk.Galleries do
           |> Scoped.put_studio(scope)
           |> Map.put("gallery_id", gallery.id)
         )
+      end)
+      # Same transaction as the row, so a frame cannot be committed with no work
+      # scheduled to process it, and a rolled-back upload cannot leave a job
+      # pointing at a row that never existed.
+      |> Oban.insert(:derive, fn %{media: media} ->
+        DeriveMediaWorker.enqueue(media.id)
       end)
       |> Repo.transaction()
       |> unwrap(:media)
