@@ -1,0 +1,301 @@
+<Layouts.app flash={@flash}>
+  <div class="app">
+    <.sidebar current_scope={@current_scope} active={:operations} />
+
+    <div class="main">
+      <.topbar title="Operations" subtitle={"The next #{horizon_days()} days"} />
+
+      <div class="seg" style="margin-bottom:14px">
+        <button aria-pressed={to_string(@tab == "today")} phx-click="tab" phx-value-tab="today">
+          What needs sorting
+        </button>
+        <button aria-pressed={to_string(@tab == "gear")} phx-click="tab" phx-value-tab="gear">
+          Kit <span :if={@overdue != []} class="n">{length(@overdue)}</span>
+        </button>
+      </div>
+
+      <%= if @tab == "today" do %>
+        <div class="stats" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat">
+            <div class="k">Shoots</div>
+            <div class="v">{length(@jobs)}</div>
+            <div class="d">next {horizon_days()} days</div>
+          </div>
+          <div class="stat">
+            <div class="k">Clashes</div>
+            <div class="v">{length(@clashes)}</div>
+            <div class={["d", @clashes != [] && "down"]}>
+              {if @clashes == [], do: "nothing overlapping", else: "somebody is double-booked"}
+            </div>
+          </div>
+          <div class="stat">
+            <div class="k">Kit out</div>
+            <div class="v">{length(@out)}</div>
+            <div class={["d", @overdue != [] && "down"]}>
+              {if @overdue == [], do: "none overdue", else: "#{length(@overdue)} overdue"}
+            </div>
+          </div>
+          <div class="stat">
+            <div class="k">Away</div>
+            <div class="v">{length(@away)}</div>
+            <div class="d">on approved leave</div>
+          </div>
+        </div>
+
+        <div class="split" style="grid-template-columns:1fr 1fr">
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Coming up</h3>
+                <span class="spacer"></span>
+                <a class="btn sm ghost" href={~p"/app/calendar"}>Calendar</a>
+              </div>
+              <div :if={@jobs != []} class="list">
+                <div :for={job <- Enum.take(@jobs, 8)} class="it">
+                  <span class="dot"></span>
+                  <span style="flex:1;min-width:0">
+                    <b>{job.title}</b>
+                    <span class="sub">{where_line(job)}</span>
+                  </span>
+                  <span class="t">{when_line(@current_scope, job)}</span>
+                </div>
+              </div>
+              <.empty
+                :if={@jobs == []}
+                title="Nothing booked in the next fortnight"
+                body="Shoots appear here as they are confirmed."
+              />
+            </div>
+
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Travel days</h3>
+              </div>
+              <div :if={@travel != []} class="list">
+                <div :for={item <- @travel} class="it">
+                  <span class="dot warn"></span>
+                  <span style="flex:1;min-width:0">
+                    <b>{item.label || "Travel"}</b>
+                    <span class="sub">{person(item)}</span>
+                  </span>
+                </div>
+              </div>
+              <.empty :if={@travel == []} title="No travel booked" />
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Double-booked</h3>
+              </div>
+              <div :if={@clashes != []} class="list">
+                <div :for={clash <- @clashes} class="it" style="align-items:flex-start">
+                  <span class="dot bad" style="margin-top:6px"></span>
+                  <span style="flex:1;min-width:0">
+                    <b>{clash_line(@current_scope, clash)} · {person(clash)}</b>
+                    <span class="sub">{clash_detail(clash)}</span>
+                  </span>
+                </div>
+              </div>
+              <.empty
+                :if={@clashes == []}
+                title="Nobody is in two places"
+                body="A pencilled date sitting on top of booked work would show here."
+              />
+            </div>
+
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Nowhere written down</h3>
+              </div>
+
+              <div :if={missing_venue(@jobs) != []} class="list">
+                <div :for={job <- missing_venue(@jobs)} class="it">
+                  <span class="dot bad"></span>
+                  <span style="flex:1;min-width:0">
+                    <b>{job.title}</b>
+                    <span class="sub">No venue at all</span>
+                  </span>
+                  <span class="t">{when_line(@current_scope, job)}</span>
+                </div>
+              </div>
+
+              <div :if={missing_notes(@jobs) != []} class="list">
+                <div :for={job <- missing_notes(@jobs)} class="it">
+                  <span class="dot warn"></span>
+                  <span style="flex:1;min-width:0">
+                    <b>{job.title}</b>
+                    <span class="sub">{job.venue_name} · no notes</span>
+                  </span>
+                  <span class="t">{when_line(@current_scope, job)}</span>
+                </div>
+              </div>
+
+              <.empty
+                :if={missing_venue(@jobs) == [] and missing_notes(@jobs) == []}
+                title="Everything has an address"
+                body="This is the Friday-night phone call, and it is the cheapest one to avoid."
+              />
+            </div>
+
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Away</h3>
+              </div>
+              <div :if={@away != []} class="list">
+                <div :for={request <- @away} class="it">
+                  <span class="dot warn"></span>
+                  <span style="flex:1;min-width:0">
+                    <b>{person(request)}</b>
+                    <span class="sub">{String.capitalize(request.kind)}</span>
+                  </span>
+                  <span class="t">{away_line(@current_scope, request)}</span>
+                </div>
+              </div>
+              <.empty :if={@away == []} title="Everybody is around" />
+            </div>
+          </div>
+        </div>
+      <% else %>
+        <div class="split">
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Out right now</h3>
+                <span :if={@overdue != []} class="spacer"></span>
+                <span :if={@overdue != []} class="pill bad">{length(@overdue)} overdue</span>
+              </div>
+
+              <div :if={@out != []} class="list">
+                <div :for={checkout <- @out} class="it">
+                  <span class={["dot", overdue?(@current_scope, checkout) && "bad"]}></span>
+                  <span style="flex:1;min-width:0">
+                    <b>{checkout.gear_item.name}</b>
+                    <span class="sub">
+                      {person(checkout)}{if checkout.job, do: " · #{checkout.job.title}"}
+                    </span>
+                  </span>
+                  <span class={["t", overdue?(@current_scope, checkout) && "bad-text"]}>
+                    {due_line(@current_scope, checkout)}
+                  </span>
+                  <button class="btn sm" phx-click="check-in" phx-value-id={checkout.id}>
+                    Back in
+                  </button>
+                </div>
+              </div>
+
+              <.empty
+                :if={@out == []}
+                title="Everything is in the cupboard"
+                body="Sign a piece of kit out and it shows here with who has it."
+              />
+            </div>
+
+            <div class="panel">
+              <div class="ph-head">
+                <h3>The kit list</h3>
+              </div>
+              <div :if={@gear != []} class="list">
+                <div :for={item <- @gear} class="it">
+                  <span style="flex:1;min-width:0">
+                    <b>{item.name}</b>
+                    <span class="sub">
+                      {String.capitalize(item.category)}{if item.serial,
+                        do: " · #{item.serial}"}
+                    </span>
+                  </span>
+                  <button
+                    class="btn sm ghost"
+                    phx-click="retire-gear"
+                    phx-value-id={item.id}
+                    data-confirm={"Retire #{item.name}? Past checkouts keep naming it."}
+                  >
+                    Retire
+                  </button>
+                </div>
+              </div>
+              <.empty
+                :if={@gear == []}
+                title="No kit on the books"
+                body="Add what the studio owns and you can track where it is."
+              />
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Sign something out</h3>
+              </div>
+
+              <.form for={to_form(%{}, as: :checkout)} phx-submit="check-out" class="form">
+                <.field label="What">
+                  <select name="checkout[gear_item_id]" required>
+                    <option :for={item <- @available} value={item.id}>
+                      {item.name} · {String.capitalize(item.category)}
+                    </option>
+                  </select>
+                  <span :if={@available == []} class="hint-line">
+                    Everything is already out.
+                  </span>
+                </.field>
+
+                <.field label="Who is taking it">
+                  <select name="checkout[user_id]">
+                    <option :for={{name, id} <- member_options(@members)} value={id}>
+                      {name}
+                    </option>
+                  </select>
+                </.field>
+
+                <.field label="What for">
+                  <select name="checkout[job_id]">
+                    <option value="">Not for a particular shoot</option>
+                    <option :for={{title, id} <- job_options(@jobs)} value={id}>{title}</option>
+                  </select>
+                </.field>
+
+                <.field label="Back by">
+                  <input type="date" name="checkout[due_back_on]" />
+                </.field>
+
+                <.form_actions>
+                  <button type="submit" class="btn primary" disabled={@available == []}>
+                    Sign it out
+                  </button>
+                </.form_actions>
+              </.form>
+            </div>
+
+            <div class="panel">
+              <div class="ph-head">
+                <h3>Add to the kit list</h3>
+              </div>
+              <.form for={to_form(%{}, as: :gear)} phx-submit="add-gear" class="form">
+                <.field label="What is it">
+                  <input type="text" name="gear[name]" placeholder="A7 IV body #2" required />
+                </.field>
+                <.row layout="two">
+                  <.field label="Kind">
+                    <select name="gear[category]">
+                      <option :for={{label, value} <- gear_categories()} value={value}>
+                        {label}
+                      </option>
+                    </select>
+                  </.field>
+                  <.field label="Serial">
+                    <input type="text" name="gear[serial]" placeholder="Optional" />
+                  </.field>
+                </.row>
+                <.form_actions>
+                  <button type="submit" class="btn primary">Add it</button>
+                </.form_actions>
+              </.form>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>

@@ -23,20 +23,115 @@ defmodule AperDeskWeb.TeamLive do
 
   alias AperDesk.Accounts
   alias AperDesk.Accounts.{Membership, UserInvitation}
+  alias AperDesk.Authorization
   alias AperDesk.Formats
   alias AperDesk.Money
+  alias AperDesk.People
+  alias AperDesk.People.LeaveRequest
+  alias AperDesk.Scheduling
 
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      socket
      |> assign(page_title: "Team")
-     |> assign(editing: nil, invite_token: nil)
+     |> assign(editing: nil, invite_token: nil, tab: "people", onboarding_for: nil)
      |> assign(invite_form: blank_invite())
      |> load()}
   end
 
   @impl true
+  def handle_event("tab", %{"tab" => tab}, socket)
+      when tab in ~w(people leave roster onboarding) do
+    {:noreply, socket |> assign(tab: tab) |> load()}
+  end
+
+  def handle_event("approve-leave", %{"id" => id}, socket) do
+    case People.approve_leave(socket.assigns.current_scope, id) do
+      {:ok, _request} ->
+        {:noreply,
+         socket
+         |> load()
+         |> put_flash(:info, "Approved. The dates are blocked on the calendar.")}
+
+      {:error, {:already_decided, status}} ->
+        {:noreply, put_flash(socket, :error, "That request was already #{status}.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not approve it: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("decline-leave", %{"id" => id}, socket) do
+    case People.decline_leave(socket.assigns.current_scope, id) do
+      {:ok, _request} ->
+        {:noreply, socket |> load() |> put_flash(:info, "Declined.")}
+
+      {:error, {:already_decided, status}} ->
+        {:noreply, put_flash(socket, :error, "That request was already #{status}.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not decline it: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("cancel-leave", %{"id" => id}, socket) do
+    case People.cancel_leave(socket.assigns.current_scope, id) do
+      {:ok, _request} ->
+        {:noreply, socket |> load() |> put_flash(:info, "Withdrawn. The dates are free again.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not withdraw it: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("request-leave", %{"leave" => params}, socket) do
+    scope = socket.assigns.current_scope
+    params = Map.put_new(params, "user_id", scope.user.id)
+
+    case People.request_leave(scope, params) do
+      {:ok, _request} ->
+        {:noreply, socket |> load() |> put_flash(:info, "Asked for. HR will decide.")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, put_flash(socket, :error, first_error(changeset))}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not ask: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("start-onboarding", %{"id" => id}, socket) do
+    case People.start_onboarding(socket.assigns.current_scope, id) do
+      {:ok, _tasks} ->
+        {:noreply,
+         socket |> assign(tab: "onboarding") |> load() |> put_flash(:info, "Checklist started.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not start it: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("toggle-task", %{"id" => id}, socket) do
+    case People.toggle_onboarding_task(socket.assigns.current_scope, id) do
+      {:ok, _task} ->
+        {:noreply, load(socket)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not tick it: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("add-task", %{"task" => %{"label" => label, "membership_id" => id}}, socket) do
+    case People.add_onboarding_task(socket.assigns.current_scope, id, label) do
+      {:ok, _task} ->
+        {:noreply, load(socket)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not add it: #{inspect(reason)}")}
+    end
+  end
+
   def handle_event("edit", %{"id" => id}, socket) do
     case Enum.find(socket.assigns.members, &(&1.id == id)) do
       nil ->
@@ -169,7 +264,108 @@ defmodule AperDeskWeb.TeamLive do
     |> assign(members: members)
     |> assign(invitations: invitations)
     |> assign(owners: Enum.count(members, &(&1.role == "owner" and &1.status == "active")))
+    |> load_tab(members)
   end
+
+  # Each tab loads only what it draws. HR opening the roster should not pay for
+  # an onboarding query it is not going to render.
+  defp load_tab(socket, members) do
+    scope = socket.assigns.current_scope
+
+    case socket.assigns.tab do
+      "leave" ->
+        assign(socket, leave: ok_or(People.list_leave(scope), []))
+
+      "roster" ->
+        {from, to} = roster_week(scope)
+
+        socket
+        |> assign(roster_from: from, roster_to: to)
+        |> assign(roster: roster(scope, members, from, to))
+
+      "onboarding" ->
+        assign(socket, onboarding: ok_or(People.onboarding_in_progress(scope), []))
+
+      _people ->
+        assign(socket, leave: ok_or(People.list_leave(scope, status: "pending"), []))
+    end
+  end
+
+  defp ok_or({:ok, value}, _fallback), do: value
+  defp ok_or(_error, fallback), do: fallback
+
+  defp roster_week(scope) do
+    today = Formats.today_for(scope)
+    start_day = Formats.week_start_day(scope)
+    offset = rem(Date.day_of_week(today) - start_day + 7, 7)
+    from = Date.add(today, -offset)
+    {from, Date.add(from, 6)}
+  end
+
+  # One row per person, one cell per day, built from the assignments they are
+  # actually on. Leave shows as leave rather than as a gap, because "off" and
+  # "nobody booked them" are different problems for whoever is filling a shift.
+  defp roster(scope, members, from, to) do
+    {:ok, day_from} = DateTime.new(from, ~T[00:00:00], scope.time_zone)
+    {:ok, day_to} = DateTime.new(Date.add(to, 1), ~T[00:00:00], scope.time_zone)
+
+    assignments =
+      case Scheduling.calendar(scope, {day_from, day_to}) do
+        {:ok, list} -> list
+        _ -> []
+      end
+
+    by_user = Enum.group_by(assignments, & &1.user_id)
+    days = Date.range(from, to) |> Enum.to_list()
+
+    for member <- Enum.filter(members, &(&1.status == "active")) do
+      %{
+        member: member,
+        days:
+          Enum.map(days, fn day ->
+            by_user
+            |> Map.get(member.user_id, [])
+            |> Enum.filter(&covers?(&1, day, scope.time_zone))
+            |> cell()
+          end)
+      }
+    end
+  end
+
+  defp covers?(assignment, day, time_zone) do
+    {from, to} = assignment.period
+
+    with {:ok, day_start} <- DateTime.new(day, ~T[00:00:00], time_zone),
+         {:ok, day_end} <- DateTime.new(Date.add(day, 1), ~T[00:00:00], time_zone) do
+      DateTime.compare(from, day_end) == :lt and DateTime.compare(day_start, to) == :lt
+    else
+      _ -> false
+    end
+  end
+
+  defp cell([]), do: %{label: "free", kind: "free"}
+
+  defp cell(assignments) do
+    leave = Enum.find(assignments, &(&1.kind == "hold" and &1.label =~ "leave"))
+
+    cond do
+      leave -> %{label: "away", kind: "x"}
+      true -> %{label: assignment_label(hd(assignments)), kind: "on"}
+    end
+  end
+
+  defp assignment_label(assignment) do
+    cond do
+      assignment.job -> assignment.job.title
+      assignment.label -> assignment.label
+      true -> String.capitalize(assignment.kind)
+    end
+  end
+
+  defp first_error(%Ecto.Changeset{errors: [{field, {message, _}} | _]}),
+    do: "#{field |> to_string() |> String.replace("_", " ") |> String.capitalize()} #{message}."
+
+  defp first_error(_changeset), do: "That would not save."
 
   # The day rate is typed in major units like every other price on the product.
   defp with_rate(params, socket) do
@@ -206,6 +402,54 @@ defmodule AperDeskWeb.TeamLive do
       "A studio has to keep at least one owner — nobody else can reach billing, and there is no way back in from inside the product."
 
   ## Presentation
+
+  @doc "The tabs this scope may open. Leave is visible to anyone who can take it."
+  def tabs(scope) do
+    [
+      {"people", "People"},
+      {"leave", "Leave", :"leave.read"},
+      {"roster", "Roster", :"assignment.read"},
+      {"onboarding", "Onboarding", :"onboarding.read"}
+    ]
+    |> Enum.filter(fn
+      {_key, _label} -> true
+      {_key, _label, permission} -> Authorization.can?(scope, permission)
+    end)
+    |> Enum.map(fn
+      {key, label} -> {key, label}
+      {key, label, _permission} -> {key, label}
+    end)
+  end
+
+  def can?(scope, permission), do: Authorization.can?(scope, permission)
+
+  @doc "How many requests are waiting, for the badge on the tab."
+  def pending_count(leave) when is_list(leave),
+    do: Enum.count(leave, &(&1.status == "pending"))
+
+  def pending_count(_leave), do: 0
+
+  def leave_kinds, do: Enum.map(LeaveRequest.kinds(), &{String.capitalize(&1), &1})
+
+  def leave_status_tone("approved"), do: "ok"
+  def leave_status_tone("declined"), do: "bad"
+  def leave_status_tone("cancelled"), do: ""
+  def leave_status_tone(_pending), do: "warn"
+
+  def leave_dates(scope, request) do
+    days = LeaveRequest.days(request)
+
+    "#{Formats.date(scope, request.starts_on)} – #{Formats.date(scope, request.ends_on)} · #{days} #{if days == 1, do: "day", else: "days"}"
+  end
+
+  def leave_person(%{user: %{name: name}}), do: name
+  def leave_person(_request), do: "Somebody"
+
+  def weekday_names(scope) do
+    names = ~w(Mon Tue Wed Thu Fri Sat Sun)
+    start = Formats.week_start_day(scope)
+    Enum.slice(names, (start - 1)..6) ++ Enum.slice(names, 0, start - 1)
+  end
 
   def roles, do: Membership.roles()
 

@@ -166,6 +166,13 @@ defmodule AperDeskWeb.AppComponents do
         icon: nav_icon(:people)
       },
       %{
+        key: :operations,
+        label: "Operations",
+        path: "/app/operations",
+        permission: :"gear.read",
+        icon: nav_icon(:box)
+      },
+      %{
         key: :packages,
         label: "Packages",
         path: "/app/packages",

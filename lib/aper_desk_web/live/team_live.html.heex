@@ -14,6 +14,20 @@
         </:actions>
       </.topbar>
 
+      <div class="seg" style="margin-bottom:14px">
+        <button
+          :for={{key, label} <- tabs(@current_scope)}
+          aria-pressed={to_string(@tab == key)}
+          phx-click="tab"
+          phx-value-tab={key}
+        >
+          {label}
+          <span :if={key == "leave" and @tab != "leave" and pending_count(@leave) > 0} class="n">
+            {pending_count(@leave)}
+          </span>
+        </button>
+      </div>
+
       <div :if={@invite_token} class="panel" style="margin-bottom:12px">
         <div class="ph-head">
           <h3>The link for {@invited_email}</h3>
@@ -35,7 +49,7 @@
         </span>
       </div>
 
-      <div class="split">
+      <div :if={@tab == "people"} class="split">
         <div>
           <div :if={@members != []} class="team" style="grid-template-columns:repeat(2,1fr)">
             <div :for={member <- @members} class="member">
@@ -225,6 +239,231 @@
             </div>
             <.empty :if={@invitations == []} title="Nobody outstanding" />
           </div>
+        </div>
+      </div>
+
+      <div :if={@tab == "leave"} class="split">
+        <div>
+          <div :if={@leave != []} class="tablewrap">
+            <table style="min-width:520px">
+              <thead>
+                <tr>
+                  <th>Who</th>
+                  <th>When</th>
+                  <th>Why</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={request <- @leave}>
+                  <td>{leave_person(request)}</td>
+                  <td>{leave_dates(@current_scope, request)}</td>
+                  <td>
+                    {String.capitalize(request.kind)}
+                    <span
+                      :if={request.reason}
+                      style="display:block;color:var(--faint);font-size:12px"
+                    >
+                      {request.reason}
+                    </span>
+                  </td>
+                  <td>
+                    <span class={["pill", leave_status_tone(request.status)]}>
+                      {String.capitalize(request.status)}
+                    </span>
+                  </td>
+                  <td style="text-align:right;white-space:nowrap">
+                    <button
+                      :if={request.status == "pending" and can?(@current_scope, :"leave.approve")}
+                      class="btn sm"
+                      phx-click="approve-leave"
+                      phx-value-id={request.id}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      :if={request.status == "pending" and can?(@current_scope, :"leave.approve")}
+                      class="btn sm ghost"
+                      phx-click="decline-leave"
+                      phx-value-id={request.id}
+                    >
+                      Decline
+                    </button>
+                    <button
+                      :if={
+                        request.status in ~w(pending approved) and
+                          request.user_id == @current_scope.user.id
+                      }
+                      class="btn sm ghost"
+                      phx-click="cancel-leave"
+                      phx-value-id={request.id}
+                      data-confirm="Withdraw this request? The dates go back on the calendar."
+                    >
+                      Withdraw
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <.empty
+            :if={@leave == []}
+            title="Nobody has asked for time off"
+            body="Approving a request blocks the dates on the calendar, so nobody can be booked while they are away."
+          />
+        </div>
+
+        <div class="panel">
+          <div class="ph-head">
+            <h3>Ask for time off</h3>
+          </div>
+          <.form for={to_form(%{}, as: :leave)} phx-submit="request-leave" class="form">
+            <.field :if={can?(@current_scope, :"leave.approve")} label="Who is away">
+              <select name="leave[user_id]">
+                <option :for={member <- @members} value={member.user_id}>
+                  {member_name(member)}
+                </option>
+              </select>
+            </.field>
+
+            <.field label="What kind">
+              <select name="leave[kind]">
+                <option :for={{label, value} <- leave_kinds()} value={value}>{label}</option>
+              </select>
+            </.field>
+
+            <.row layout="two">
+              <.field label="First day">
+                <input type="date" name="leave[starts_on]" required />
+              </.field>
+              <.field label="Last day">
+                <input type="date" name="leave[ends_on]" required />
+              </.field>
+            </.row>
+
+            <.field label="Why">
+              <input type="text" name="leave[reason]" placeholder="Optional" />
+            </.field>
+
+            <div class="hint">
+              <b>Approval blocks the calendar</b>
+              <span style="display:block;margin-top:2px">
+                It goes on as a hold, so a shoot already booked over it shows as a clash rather
+                than being refused — somebody still has to decide which moves.
+              </span>
+            </div>
+
+            <.form_actions>
+              <button type="submit" class="btn primary">Ask</button>
+            </.form_actions>
+          </.form>
+        </div>
+      </div>
+
+      <div :if={@tab == "roster"}>
+        <div class="panel">
+          <div class="ph-head">
+            <h3>This week</h3>
+            <span class="spacer"></span>
+            <span class="sub" style="color:var(--faint);font-size:12px">
+              {Formats.date(@current_scope, @roster_from)} – {Formats.date(
+                @current_scope,
+                @roster_to
+              )}
+            </span>
+          </div>
+
+          <div :if={@roster != []} class="roster">
+            <div class="h"></div>
+            <div :for={name <- weekday_names(@current_scope)} class="h">{name}</div>
+
+            <%= for row <- @roster do %>
+              <div class="nm">{member_name(row.member)}</div>
+              <div :for={day <- row.days} class={day.kind} title={day.label}>{day.label}</div>
+            <% end %>
+          </div>
+
+          <.empty
+            :if={@roster == []}
+            title="Nobody active to roster"
+            body="Add somebody to the studio and their week shows up here."
+          />
+
+          <p style="color:var(--faint);font-size:11.5px;margin:10px 0 0">
+            Built from the crew actually assigned to each shoot. "Away" is approved leave, which
+            is a different problem from nobody being booked.
+          </p>
+        </div>
+      </div>
+
+      <div :if={@tab == "onboarding"} class="split">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div :for={person <- @onboarding} class="panel">
+            <div class="ph-head">
+              <h3>{member_name(person.membership)}</h3>
+              <span class="spacer"></span>
+              <span class="pill">{person.done} of {person.total}</span>
+            </div>
+
+            <div class="list">
+              <div :for={task <- person.tasks} class="it">
+                <label class="checkfield" style="flex:1;min-width:0">
+                  <input
+                    type="checkbox"
+                    checked={not is_nil(task.done_at)}
+                    phx-click="toggle-task"
+                    phx-value-id={task.id}
+                  />
+                  <span style={
+                    if task.done_at, do: "color:var(--faint);text-decoration:line-through"
+                  }>
+                    {task.label}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <.form
+              for={to_form(%{}, as: :task)}
+              phx-submit="add-task"
+              class="form"
+              style="margin-top:10px"
+            >
+              <input type="hidden" name="task[membership_id]" value={person.membership.id} />
+              <div class="row two">
+                <input type="text" name="task[label]" placeholder="Add a step" required />
+                <button type="submit" class="btn sm">Add</button>
+              </div>
+            </.form>
+          </div>
+
+          <.empty
+            :if={@onboarding == []}
+            title="Nobody part-way through"
+            body="Start a checklist for a new member and their progress shows here until it is finished."
+          />
+        </div>
+
+        <div class="panel">
+          <div class="ph-head">
+            <h3>Start somebody off</h3>
+          </div>
+          <div class="list">
+            <div :for={member <- @members} class="it">
+              <span style="flex:1;min-width:0">
+                <b>{member_name(member)}</b>
+                <span class="sub">{role_label(member.role)}</span>
+              </span>
+              <button class="btn sm" phx-click="start-onboarding" phx-value-id={member.id}>
+                Start
+              </button>
+            </div>
+          </div>
+          <p style="color:var(--faint);font-size:11.5px;margin:10px 0 0">
+            Adds the studio's standard checklist. You can add steps to it afterwards.
+          </p>
         </div>
       </div>
     </div>
