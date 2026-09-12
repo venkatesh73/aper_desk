@@ -13,7 +13,6 @@ defmodule AperDeskWeb.SEOTest do
 
   import Ecto.Query
   import AperDesk.Fixtures
-  import Phoenix.LiveViewTest
 
   alias AperDesk.{Accounts, Directory, Galleries, Repo, Sales}
 

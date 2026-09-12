@@ -1,4 +1,4 @@
-<%= if @gallery do %>
+<%= if @stage == :open do %>
   <Layouts.flash_group flash={@flash} />
 
   <div class="cg">
@@ -75,15 +75,95 @@
     </div>
   </div>
 <% else %>
+  <Layouts.flash_group flash={@flash} />
+
   <div style="min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center">
-    <div style="max-width:420px">
-      <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:32px">
-        This link does not open anything
-      </h1>
-      <p style="color:var(--muted);margin-top:10px">
-        It may have been replaced, or the gallery's window may have closed. Ask your photographer
-        for a new one.
-      </p>
+    <div style="max-width:420px;width:100%">
+      <%!-- The gate. The gallery title is the only thing shown before a code is
+      redeemed, because everything else is the thing being protected. --%>
+      <div :if={@stage in [:email, :code]}>
+        <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:32px">
+          {@gallery.title}
+        </h1>
+        <p style="color:var(--muted);margin-top:10px">
+          {@gallery.studio.name} asked us to check it is you before opening this gallery.
+        </p>
+
+        <form :if={@stage == :email} phx-submit="request-code" style="margin-top:22px">
+          <div class="field">
+            <label for="gate-email">Your email address</label>
+            <input
+              id="gate-email"
+              name="email"
+              type="email"
+              value={@email}
+              required
+              autocomplete="email"
+              placeholder="you@example.com"
+            />
+          </div>
+          <button class="btn primary" type="submit" style="width:100%;margin-top:12px">
+            Email me a code
+          </button>
+          <p style="color:var(--faint);font-size:12px;margin-top:12px">
+            The code goes to the address your photographer sent this link to, so it only arrives
+            if the one you enter is the same.
+          </p>
+        </form>
+
+        <form :if={@stage == :code} phx-submit="submit-code" style="margin-top:22px">
+          <div class="field">
+            <label for="gate-code">The six-digit code</label>
+            <input
+              id="gate-code"
+              name="code"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="6"
+              autocomplete="one-time-code"
+              required
+              autofocus
+              placeholder="000000"
+              style="text-align:center;letter-spacing:6px;font-size:20px"
+            />
+          </div>
+          <button class="btn primary" type="submit" style="width:100%;margin-top:12px">
+            Open the gallery
+          </button>
+          <p style="color:var(--faint);font-size:12px;margin-top:12px">
+            If it is your address, a code is on its way. It lasts 15 minutes.
+            <a href="#" phx-click="start-over" style="color:var(--muted)">
+              Use a different address
+            </a>
+          </p>
+        </form>
+
+        <p :if={@error} class="bad-text" style="margin-top:14px;font-size:13px">{@error}</p>
+      </div>
+
+      <%!-- The studio turned the code on for a link it never addressed to
+      anyone. There is nowhere to send a code, and guessing an address would
+      defeat the point of asking for one. --%>
+      <div :if={@stage == :unaddressed}>
+        <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:32px">
+          This link needs a name on it
+        </h1>
+        <p style="color:var(--muted);margin-top:10px">
+          The gallery asks for a code, but this link was not addressed to anyone, so there is no
+          one to send it to. Ask your photographer for a link addressed to your email.
+        </p>
+      </div>
+
+      <div :if={@stage == :closed}>
+        <h1 style="font-family:Fraunces,Georgia,serif;font-weight:400;font-size:32px">
+          This link does not open anything
+        </h1>
+        <p style="color:var(--muted);margin-top:10px">
+          It may have been replaced, or the gallery's window may have closed. Ask your photographer
+          for a new one.
+        </p>
+      </div>
     </div>
   </div>
 <% end %>

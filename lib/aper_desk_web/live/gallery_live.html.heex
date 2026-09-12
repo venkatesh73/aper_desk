@@ -316,7 +316,13 @@
                 <span class="dot ok"></span>
                 <span style="flex:1;min-width:0">
                   <b>{share.label || share.email || "Share link"}</b>
-                  <span class="sub">
+                  <%!-- A code can only be sent to an address the link names, so
+                  a gated link with no address opens for nobody. Said here
+                  rather than left for the client to discover. --%>
+                  <span :if={@gallery.requires_otp and is_nil(share.email)} class="sub bad-text">
+                    No address on this link, so its code has nowhere to go — it will not open
+                  </span>
+                  <span :if={not (@gallery.requires_otp and is_nil(share.email))} class="sub">
                     Opened {share.view_count} {if share.view_count == 1, do: "time", else: "times"}
                   </span>
                 </span>

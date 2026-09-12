@@ -12,6 +12,11 @@ defmodule AperDeskWeb.ClientGalleryLive do
   event, and every write goes through the `%GalleryShare{}` it resolved to, so
   a favourite is always attributed to the link it came through — which is how
   a studio can tell the couple's picks apart from the best man's.
+
+  A gallery with `requires_otp` set puts a code in front of all of that. The
+  code is mailed to the address the studio named on the share and nowhere else,
+  and until it is redeemed this socket holds no media at all — a gate that
+  loads the photographs and then declines to draw them is not a gate.
   """
 
   use AperDeskWeb, :live_view
@@ -19,29 +24,102 @@ defmodule AperDeskWeb.ClientGalleryLive do
   alias AperDesk.Galleries
 
   @impl true
-  def mount(%{"token" => token}, _session, socket) do
-    # Resolved either way, but counted only once. A LiveView mounts twice — the
-    # dead render and then the socket — and recording both would tell the
-    # studio the client came back when they only arrived.
-    opener =
-      if connected?(socket),
-        do: &Galleries.open_shared_gallery/1,
-        else: &Galleries.resolve_shared_gallery/1
+  def mount(%{"token" => token}, session, socket) do
+    unlocked = session["unlocked_galleries"] || []
 
-    case opener.(token) do
+    # Resolved before anything is opened, so a visit is not recorded for
+    # someone who never got past the gate and — the part that matters — the
+    # photographs are never loaded into a socket that has not proved itself.
+    case Galleries.resolve_shared_gallery(token) do
       {:ok, gallery, share} ->
-        {:ok,
-         socket
-         |> assign(page_title: gallery.title)
-         |> assign(gallery: gallery, share: share, filter: "all")
-         |> assign(media: media(gallery))
-         |> load_selections()
-         |> assign(:page_layout, false)}
+        cond do
+          Galleries.gated?(gallery, unlocked) ->
+            {:ok, gate(socket, token, gallery, share)}
+
+          # Counted once, not twice. A LiveView mounts twice — the dead render
+          # and then the socket — and recording both would tell the studio the
+          # client came back when they only arrived.
+          connected?(socket) ->
+            {:ok, gallery, share} = Galleries.open_shared_gallery(token)
+            {:ok, opened(socket, gallery, share)}
+
+          true ->
+            {:ok, opened(socket, gallery, share)}
+        end
 
       {:error, _reason} ->
-        {:ok, assign(socket, gallery: nil, share: nil, page_title: "Gallery")}
+        {:ok,
+         socket
+         |> assign(gallery: nil, share: nil, stage: :closed, page_title: "Gallery")
+         |> assign(token: token, email: "", error: nil, media: [], filter: "all")
+         |> assign(favourites: MapSet.new())
+         |> assign(:page_layout, false)}
     end
   end
+
+  defp opened(socket, gallery, share) do
+    socket
+    |> assign(page_title: gallery.title)
+    |> assign(gallery: gallery, share: share, filter: "all", stage: :open)
+    |> assign(media: media(gallery))
+    |> load_selections()
+    |> assign(:page_layout, false)
+  end
+
+  defp gate(socket, token, gallery, share) do
+    socket
+    |> assign(page_title: gallery.title)
+    |> assign(gallery: gallery, share: share, token: token)
+    |> assign(stage: if(is_nil(share.email), do: :unaddressed, else: :email))
+    |> assign(email: "", error: nil)
+    # Nothing about the shoot beyond its title, and no media at all: this
+    # socket belongs to someone who has not yet shown they should have it.
+    |> assign(media: [], favourites: MapSet.new(), filter: "all")
+    |> assign(:page_layout, false)
+  end
+
+  ## The gate
+
+  @impl true
+  def handle_event("request-code", %{"email" => email}, socket) do
+    case Galleries.request_access_code(socket.assigns.token, email) do
+      :ok ->
+        {:noreply, assign(socket, stage: :code, email: email, error: nil)}
+
+      {:error, :no_recipient} ->
+        {:noreply, assign(socket, stage: :unaddressed)}
+
+      {:error, _reason} ->
+        # Includes a link that went stale between loading the page and
+        # submitting it. Same page either way; it will not open.
+        {:noreply, assign(socket, stage: :closed, gallery: nil)}
+    end
+  end
+
+  def handle_event("submit-code", %{"code" => code}, socket) do
+    token = socket.assigns.token
+
+    case Galleries.redeem_access_code(token, socket.assigns.email, code) do
+      {:ok, gallery} ->
+        # Out to the controller and straight back, so the unlock lands in the
+        # session and survives a refresh.
+        pass = AperDeskWeb.ClientGalleryController.sign(gallery.id)
+        {:noreply, redirect(socket, to: ~p"/g/#{token}/unlock?pass=#{pass}")}
+
+      {:error, :expired_or_exhausted} ->
+        {:noreply,
+         assign(socket,
+           stage: :email,
+           error: "That code has expired or been tried too many times. Ask for a new one."
+         )}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, error: "That code is not right.")}
+    end
+  end
+
+  def handle_event("start-over", _params, socket),
+    do: {:noreply, assign(socket, stage: :email, error: nil)}
 
   @impl true
   def handle_event("favourite", %{"id" => id}, socket) do

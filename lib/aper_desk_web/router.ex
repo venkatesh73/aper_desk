@@ -52,6 +52,10 @@ defmodule AperDeskWeb.Router do
     # The client's way in. The token is the whole authorisation — there is no
     # scope here, and the gallery id opens nothing.
     live "/g/:token", ClientGalleryLive, :show
+
+    # A LiveView cannot write the session, so a gallery that passed its code
+    # check comes through here to have that recorded before going back.
+    get "/g/:token/unlock", ClientGalleryController, :unlock
     live "/q/:token", ClientQuoteLive, :show
 
     # The form a studio embeds on its own site. Public by definition: the

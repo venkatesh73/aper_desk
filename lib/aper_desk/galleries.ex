@@ -18,6 +18,8 @@ defmodule AperDesk.Galleries do
   alias AperDesk.Billing.Limits
   alias AperDesk.Events
 
+  alias AperDesk.Galleries.Notifier
+
   alias AperDesk.Galleries.{
     Gallery,
     GalleryAccessCode,
@@ -423,6 +425,97 @@ defmodule AperDesk.Galleries do
         end
     end
   end
+
+  ## The gate in front of a gated gallery
+
+  @doc """
+  Whether this link still needs a code before it opens anything.
+
+  `unlocked` is the list of gallery ids the browser has already proved itself
+  for, carried in the session.
+  """
+  def gated?(%Gallery{requires_otp: false}, _unlocked), do: false
+  def gated?(%Gallery{} = gallery, unlocked), do: gallery.id not in List.wrap(unlocked)
+
+  @doc """
+  Ask for a one-time code.
+
+  The code goes to the address the *studio* named on the share, never to the
+  address typed into the form. Sending it to whatever the visitor asks for
+  would make the gate prove only that they own an inbox, which is not a fact
+  about whether they should see the photographs.
+
+  A mismatched address gets the same answer as a matching one. Anything else
+  turns the form into an oracle for "is this the couple's email".
+  """
+  def request_access_code(token, email) when is_binary(token) and is_binary(email) do
+    with {:ok, gallery, share} <- resolve_shared_gallery(token) do
+      cond do
+        not gallery.requires_otp -> {:error, :not_gated}
+        is_nil(share.email) -> {:error, :no_recipient}
+        not same_address?(share.email, email) -> :ok
+        true -> send_access_code(gallery, share)
+      end
+    end
+  end
+
+  @doc """
+  Redeem a code and return the gallery it opens.
+
+  Verification is always against the share's own address, so a code issued for
+  the couple cannot be redeemed by someone who typed a different address into
+  the form alongside it.
+  """
+  def redeem_access_code(token, email, code)
+      when is_binary(token) and is_binary(email) and is_binary(code) do
+    with {:ok, gallery, share} <- resolve_shared_gallery(token) do
+      if is_nil(share.email) or not same_address?(share.email, email) do
+        {:error, :invalid_code}
+      else
+        case verify_access_code(gallery.id, share.email, code) do
+          :ok -> {:ok, gallery}
+          {:error, reason} -> {:error, reason}
+        end
+      end
+    end
+  end
+
+  # One code per minute per gallery. Without this the form is a button that
+  # mails a stranger's inbox as fast as it can be clicked, and the person being
+  # mailed is the client, not the person clicking.
+  defp send_access_code(gallery, share) do
+    if recent_code?(gallery.id, share.email) do
+      :ok
+    else
+      with {:ok, code, _record} <- issue_access_code(gallery.id, share.email) do
+        Notifier.deliver_access_code(
+          share.email,
+          gallery.studio.name,
+          gallery.title,
+          code
+        )
+
+        :ok
+      end
+    end
+  end
+
+  defp recent_code?(gallery_id, email) do
+    cutoff = DateTime.add(DateTime.utc_now(), -60, :second)
+
+    Repo.exists?(
+      from c in GalleryAccessCode,
+        where:
+          c.gallery_id == ^gallery_id and c.email == ^email and
+            is_nil(c.consumed_at) and c.inserted_at > ^cutoff
+    )
+  end
+
+  defp same_address?(a, b) when is_binary(a) and is_binary(b) do
+    String.downcase(String.trim(a)) == String.downcase(String.trim(b))
+  end
+
+  defp same_address?(_a, _b), do: false
 
   ## Internals
 
