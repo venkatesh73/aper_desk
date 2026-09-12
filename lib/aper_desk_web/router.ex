@@ -116,6 +116,16 @@ defmodule AperDeskWeb.Router do
   # LiveView UI rather than being bolted on. Complexity and depth limits are
   # applied here: a public GraphQL endpoint without them is a denial-of-service
   # waiting for a deeply nested query.
+  scope "/api", AperDeskWeb do
+    pipe_through :api
+
+    # Token auth for the mobile client. The browser signs in at /sign-in and
+    # gets a cookie; the phone signs in here and gets a bearer token.
+    post "/auth/sign-in", ApiAuthController, :sign_in
+    post "/auth/refresh", ApiAuthController, :refresh
+    post "/auth/sign-out", ApiAuthController, :sign_out
+  end
+
   scope "/api" do
     pipe_through :api
 

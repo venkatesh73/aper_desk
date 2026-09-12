@@ -5,115 +5,439 @@
     <div class="main">
       <.topbar title={@greeting} subtitle={@subtitle}>
         <:actions>
-          <a class="btn primary" href={~p"/app/leads/new"}>+ New lead</a>
+          <a
+            :if={can?(@current_scope, :"lead.write")}
+            class="btn primary"
+            href={~p"/app/leads/new"}
+          >
+            + New lead
+          </a>
+          <a :if={@role == :hr} class="btn primary" href={~p"/app/team"}>The team</a>
+          <a :if={@role == :ops} class="btn primary" href={~p"/app/operations"}>Operations</a>
         </:actions>
       </.topbar>
 
-      <div class="stats">
+      <div class="stats" style={"grid-template-columns:repeat(#{length(@stats)},1fr)"}>
         <.stat :for={s <- @stats} label={s.label} value={s.value} detail={s.detail} tone={s.tone} />
       </div>
 
-      <div class="dash">
-        <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
-          <div class="panel">
-            <div class="ph-head">
-              <h3>Needs attention</h3>
-              <span class="spacer"></span>
-              <a class="btn sm ghost" href={~p"/app/leads"}>All leads</a>
-            </div>
-            <div :if={@attention != []} class="list">
-              <div :for={item <- @attention} class="it">
-                <span class={["dot", item.tone]}></span>
-                <span>
-                  <b>{item.title}</b>
-                  <span class="sub">{item.detail}</span>
-                </span>
-                <span class="t">{item.trailing}</span>
-              </div>
-            </div>
-            <.empty
-              :if={@attention == []}
-              title="Nothing needs you right now"
-              body="Overdue replies and unpaid invoices will appear here."
-            />
-          </div>
-
-          <div class="panel">
-            <div class="ph-head">
-              <h3>Upcoming shoots</h3>
-              <span class="spacer"></span>
-              <a class="btn sm ghost" href={~p"/app/calendar"}>Calendar</a>
-            </div>
-            <div :if={@upcoming != []} class="list">
-              <div :for={job <- @upcoming} class="it">
-                <span class="dot"></span>
-                <span>
-                  <b>{job.title}</b>
-                  <span class="sub">{job.where}</span>
-                </span>
-                <span class="t">{job.when}</span>
-              </div>
-            </div>
-            <.empty
-              :if={@upcoming == []}
-              title="No shoots booked yet"
-              body="Confirmed shoots show up here with the date and venue."
-            />
-          </div>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
-          <div :if={@usage} class="panel">
-            <div class="ph-head">
-              <h3>Your plan</h3>
-              <span class="spacer"></span>
-              <span class="pill">{@usage.plan.name}</span>
-            </div>
-            <div class="list">
-              <div
-                :for={meter <- Enum.filter(@usage.meters, &(&1.limit != :unlimited))}
-                class="it"
-              >
-                <span>
-                  <b>{meter_label(meter.key)}</b>
-                  <span class="sub">{meter_usage(meter)}</span>
-                </span>
+      <%= case @role do %>
+        <% :finance -> %>
+          <div class="dash">
+            <div class="panel" style="min-width:0">
+              <div class="ph-head">
+                <h3>Cash due · next 30 days</h3>
                 <span class="spacer"></span>
-                <span class="t">{percent(meter.utilisation)}</span>
+                <a class="btn sm ghost" href={~p"/app/finance"}>Finance</a>
               </div>
-            </div>
-          </div>
 
-          <div class="panel">
-            <div class="ph-head">
-              <h3>Getting started</h3>
+              <table :if={@due_soon != []} class="mini">
+                <tr :for={invoice <- @due_soon}>
+                  <td class="mono">{invoice.reference}</td>
+                  <td>{client_name(invoice)}</td>
+                  <td>
+                    <span class={["pill", elem(invoice_due(@current_scope, invoice), 0)]}>
+                      {elem(invoice_due(@current_scope, invoice), 1)}
+                    </span>
+                  </td>
+                  <td>
+                    {money(invoice.total_cents - invoice.paid_cents, invoice.currency)}
+                  </td>
+                </tr>
+              </table>
+
+              <.empty
+                :if={@due_soon == []}
+                title="Nothing due in the next month"
+                body="Invoices with money outstanding and a date on them appear here."
+              />
             </div>
-            <div class="list">
-              <div class="it">
-                <span class="dot"></span>
-                <span>
-                  <b>Add your first package</b>
-                  <span class="sub">What you sell, and for how much</span>
-                </span>
+
+            <div class="panel" style="min-width:0">
+              <div class="ph-head">
+                <h3>Crew waiting to be paid</h3>
+                <span class="spacer"></span>
+                <a class="btn sm ghost" href={~p"/app/finance"}>Payouts</a>
               </div>
-              <div class="it">
-                <span class="dot"></span>
-                <span>
-                  <b>Connect your inbox</b>
-                  <span class="sub">Forwarded enquiries become leads</span>
-                </span>
+
+              <div :if={@payouts != []} class="list">
+                <div :for={payout <- @payouts} class="it">
+                  <span class="dot warn"></span>
+                  <span style="flex:1;min-width:0">
+                    <b>{person(payout)}</b>
+                    <span class="sub">{payout.description}</span>
+                  </span>
+                  <span class="t">{money(payout.amount_cents, payout.currency)}</span>
+                </div>
               </div>
-              <div class="it">
-                <span class="dot"></span>
-                <span>
-                  <b>Invite your team</b>
-                  <span class="sub">Five roles, each with its own view</span>
-                </span>
+
+              <.empty
+                :if={@payouts == []}
+                title="Nobody waiting"
+                body="Approved payout runs are all-or-nothing, so nobody is half-paid."
+              />
+            </div>
+          </div>
+        <% :hr -> %>
+          <div class="dash">
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Leave to decide</h3>
+                  <span class="spacer"></span>
+                  <a class="btn sm ghost" href={~p"/app/team"}>The queue</a>
+                </div>
+
+                <div :if={@leave != []} class="list">
+                  <div :for={request <- @leave} class="it">
+                    <span class="dot warn"></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{person(request)}</b>
+                      <span class="sub">
+                        {String.capitalize(request.kind)}{if request.reason,
+                          do: " · #{request.reason}"}
+                      </span>
+                    </span>
+                    <span class="t">{leave_dates(@current_scope, request)}</span>
+                  </div>
+                </div>
+
+                <.empty
+                  :if={@leave == []}
+                  title="Nobody is waiting on an answer"
+                  body="Approving a request blocks the dates on the calendar, so nobody can be booked while they are away."
+                />
+              </div>
+
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Contracts ending</h3>
+                </div>
+                <div :if={@expiring != []} class="list">
+                  <div :for={member <- @expiring} class="it">
+                    <span class="dot bad"></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{person(%{user: member.user})}</b>
+                      <span class="sub">{String.capitalize(member.role)}</span>
+                    </span>
+                    <span class="t">{contract_ends(@current_scope, member)}</span>
+                  </div>
+                </div>
+                <.empty :if={@expiring == []} title="Nothing running out this month" />
+              </div>
+            </div>
+
+            <div class="panel" style="min-width:0">
+              <div class="ph-head">
+                <h3>Part-way through onboarding</h3>
+                <span class="spacer"></span>
+                <a class="btn sm ghost" href={~p"/app/team"}>Checklists</a>
+              </div>
+
+              <div :if={@onboarding != []} class="list">
+                <div :for={person <- @onboarding} class="it">
+                  <span style="flex:1;min-width:0">
+                    <b>{person(person)}</b>
+                    <span class="sub">{person.done} of {person.total} done</span>
+                  </span>
+                  <span class="prog" style="width:90px">
+                    <span class="bar">
+                      <i style={"width:#{round(person.done / max(person.total, 1) * 100)}%"}></i>
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              <.empty
+                :if={@onboarding == []}
+                title="Nobody mid-way"
+                body="Start a checklist for a new member and their progress shows here."
+              />
+            </div>
+          </div>
+        <% :ops -> %>
+          <div class="dash">
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Coming up</h3>
+                  <span class="spacer"></span>
+                  <a class="btn sm ghost" href={~p"/app/calendar"}>Calendar</a>
+                </div>
+
+                <div :if={@jobs != []} class="list">
+                  <div :for={job <- @jobs} class="it">
+                    <span class="dot"></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{job.title}</b>
+                      <span class="sub">
+                        {job.venue_name || job.city || "Nowhere written down"}
+                      </span>
+                    </span>
+                    <span class="t">{when_line(@current_scope, job)}</span>
+                  </div>
+                </div>
+
+                <.empty :if={@jobs == []} title="Nothing booked in the next fortnight" />
+              </div>
+
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Nowhere written down</h3>
+                  <span class="spacer"></span>
+                  <a class="btn sm ghost" href={~p"/app/operations"}>Operations</a>
+                </div>
+
+                <div :if={@missing != []} class="list">
+                  <div :for={job <- @missing} class="it">
+                    <span class="dot warn"></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{job.title}</b>
+                      <span class="sub">{venue_problem(job)}</span>
+                    </span>
+                    <span class="t">{when_line(@current_scope, job)}</span>
+                  </div>
+                </div>
+
+                <.empty
+                  :if={@missing == []}
+                  title="Everything has an address"
+                  body="This is the Friday-night phone call, and the cheapest one to avoid."
+                />
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Double-booked</h3>
+                </div>
+                <div :if={@clashes != []} class="list">
+                  <div :for={clash <- @clashes} class="it" style="align-items:flex-start">
+                    <span class="dot bad" style="margin-top:6px"></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{clash_line(@current_scope, clash)} · {person(clash)}</b>
+                      <span class="sub">{clash_detail(clash)}</span>
+                    </span>
+                  </div>
+                </div>
+                <.empty :if={@clashes == []} title="Nobody is in two places" />
+              </div>
+
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Kit overdue back</h3>
+                  <span class="spacer"></span>
+                  <a class="btn sm ghost" href={~p"/app/operations"}>The cupboard</a>
+                </div>
+
+                <div :if={@overdue_gear != []} class="list">
+                  <div :for={checkout <- @overdue_gear} class="it">
+                    <span class="dot bad"></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{checkout.gear_item.name}</b>
+                      <span class="sub">{person(checkout)}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <.empty :if={@overdue_gear == []} title="Everything came back" />
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        <% :photographer -> %>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div class="panel">
+              <div class="ph-head">
+                <h3>My week</h3>
+                <span class="spacer"></span>
+                <a class="btn sm ghost" href={~p"/app/calendar"}>Full calendar</a>
+              </div>
+
+              <div class="week">
+                <div :for={day <- @week} class={["wd", day.today && "today"]}>
+                  <span class="dn">{day_label(day.date)}</span>
+                  <span :for={job <- day.jobs} class="ev" title={job.title}>
+                    {job_time(@current_scope, job)} {job.title}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="dash">
+              <div class="panel" style="min-width:0">
+                <div class="ph-head">
+                  <h3>Needs a reply</h3>
+                  <span class="spacer"></span>
+                  <a class="btn sm ghost" href={~p"/app/leads"}>My leads</a>
+                </div>
+
+                <div :if={@attention != []} class="list">
+                  <div :for={item <- @attention} class="it">
+                    <span class={["dot", item.tone]}></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{item.title}</b>
+                      <span class="sub">{item.detail}</span>
+                    </span>
+                    <span class="t">{item.trailing}</span>
+                  </div>
+                </div>
+
+                <.empty
+                  :if={@attention == []}
+                  title="You are on top of it"
+                  body="Leads of yours past the studio's reply target would show here."
+                />
+              </div>
+
+              <div class="panel" style="min-width:0">
+                <div class="ph-head">
+                  <h3>My next shoots</h3>
+                  <span class="spacer"></span>
+                  <a class="btn sm ghost" href={~p"/app/calendar"}>Calendar</a>
+                </div>
+
+                <div :if={@upcoming != []} class="list">
+                  <div :for={job <- @upcoming} class="it">
+                    <span class="dot"></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{job.title}</b>
+                      <span class="sub">{job.where}</span>
+                    </span>
+                    <span class="t">{job.when}</span>
+                  </div>
+                </div>
+
+                <.empty
+                  :if={@upcoming == []}
+                  title="Nothing in the diary"
+                  body="Shoots you are crewed on appear here."
+                />
+              </div>
+            </div>
+          </div>
+        <% _owner -> %>
+          <div class="dash">
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Bookings by month</h3>
+                  <span class="sub" style="color:var(--faint);font-size:12px">
+                    confirmed shoots
+                  </span>
+                </div>
+
+                <div class="chart">
+                  <svg viewBox="0 0 320 170" preserveAspectRatio="none" role="img">
+                    <line x1="0" y1="150" x2="320" y2="150" />
+                    <%= for {month, index} <- Enum.with_index(@bookings) do %>
+                      <rect
+                        class={["bar", month.past && "past"]}
+                        x={index * 40 + 8}
+                        y={150 - round(month.count / chart_peak(@bookings) * 130)}
+                        width="24"
+                        height={max(round(month.count / chart_peak(@bookings) * 130), 1)}
+                        rx="2"
+                      />
+                      <text x={index * 40 + 20} y="165" text-anchor="middle">{month.label}</text>
+                      <text
+                        :if={month.count > 0}
+                        x={index * 40 + 20}
+                        y={150 - round(month.count / chart_peak(@bookings) * 130) - 5}
+                        text-anchor="middle"
+                      >
+                        {month.count}
+                      </text>
+                    <% end %>
+                  </svg>
+                </div>
+              </div>
+
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Needs attention</h3>
+                  <span class="spacer"></span>
+                  <a class="btn sm ghost" href={~p"/app/leads"}>All leads</a>
+                </div>
+
+                <div :if={@attention != []} class="list">
+                  <div :for={item <- @attention} class="it">
+                    <span class={["dot", item.tone]}></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{item.title}</b>
+                      <span class="sub">{item.detail}</span>
+                    </span>
+                    <span class="t">{item.trailing}</span>
+                  </div>
+                </div>
+
+                <.empty
+                  :if={@attention == []}
+                  title="Nothing needs you right now"
+                  body="Overdue replies and unpaid invoices will appear here."
+                />
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div class="panel">
+                <div class="ph-head">
+                  <h3>Upcoming shoots</h3>
+                  <span class="spacer"></span>
+                  <a class="btn sm ghost" href={~p"/app/calendar"}>Calendar</a>
+                </div>
+
+                <div :if={@upcoming != []} class="list">
+                  <div :for={job <- @upcoming} class="it">
+                    <span class="dot"></span>
+                    <span style="flex:1;min-width:0">
+                      <b>{job.title}</b>
+                      <span class="sub">{job.where}</span>
+                    </span>
+                    <span class="t">{job.when}</span>
+                  </div>
+                </div>
+
+                <.empty :if={@upcoming == []} title="No shoots booked yet" />
+              </div>
+
+              <div :if={@sources != []} class="panel">
+                <div class="ph-head">
+                  <h3>Where the work comes from</h3>
+                </div>
+                <div class="list">
+                  <div :for={source <- @sources} class="it">
+                    <span style="flex:1;min-width:0">
+                      <b>{source.source}</b>
+                      <span class="sub">{source.booked} of {source.count} booked</span>
+                    </span>
+                    <span class="t">{source.count}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div :if={@usage} class="panel">
+                <div class="ph-head">
+                  <h3>Your plan</h3>
+                  <span class="spacer"></span>
+                  <span class="pill">{@usage.plan.name}</span>
+                </div>
+                <div class="list">
+                  <div
+                    :for={meter <- Enum.filter(@usage.meters, &(&1.limit != :unlimited))}
+                    class="it"
+                  >
+                    <span style="flex:1;min-width:0">
+                      <b>{meter_label(meter.key)}</b>
+                      <span class="sub">{meter_usage(meter)}</span>
+                    </span>
+                    <span class="t">{percent(meter.utilisation)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+      <% end %>
     </div>
   </div>
 </Layouts.app>
