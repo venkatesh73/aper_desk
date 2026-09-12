@@ -97,6 +97,19 @@ defmodule AperDeskWeb.Graphql.Resolvers.Helpers do
     end
   end
 
+  @doc """
+  Unwrap a context result, falling back when the read was refused.
+
+  Resolvers assemble one response from several contexts, so a role that may
+  read four of them and not the fifth must still get an answer. Without this a
+  gated read reaches `length/1` or `Enum.map/2` as `{:error, :unauthorized}`
+  and takes the whole query down — which is how an HR user asking for their
+  dashboard got a 500 rather than a dashboard.
+  """
+  def ok_or({:ok, value}, _fallback), do: value
+  def ok_or({:error, _reason}, fallback), do: fallback
+  def ok_or(value, _fallback), do: value
+
   @doc "Title-case a stored enum value: `\"quote_sent\"` -> `\"Quote sent\"`."
   def humanise(nil), do: nil
 

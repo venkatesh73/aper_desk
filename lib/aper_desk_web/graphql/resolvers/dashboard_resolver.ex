@@ -55,7 +55,7 @@ defmodule AperDeskWeb.Graphql.Resolvers.DashboardResolver do
   end
 
   defp subtitle(scope, role) do
-    overdue = length(Crm.overdue_leads(scope))
+    overdue = length(Helpers.ok_or(Crm.overdue_leads(scope), []))
 
     case {role, overdue} do
       {_, 0} -> "Nothing is overdue. Nice."
@@ -67,7 +67,7 @@ defmodule AperDeskWeb.Graphql.Resolvers.DashboardResolver do
   # Money stats are omitted for roles that may not read them, rather than
   # zeroed — a zero would read as "no revenue", which is a different claim.
   defp stats(scope, role) do
-    pipeline = Crm.pipeline_summary(scope)
+    pipeline = Helpers.ok_or(Crm.pipeline_summary(scope), %{})
     open = pipeline |> Map.drop(["completed", "lost"]) |> Map.values() |> Enum.sum()
 
     base = [
@@ -87,7 +87,7 @@ defmodule AperDeskWeb.Graphql.Resolvers.DashboardResolver do
     ]
 
     if role in ["owner", "finance"] do
-      outstanding = Finance.outstanding_total(scope)
+      outstanding = Helpers.ok_or(Finance.outstanding_total(scope), Money.zero(scope.currency))
 
       base ++
         [
@@ -131,8 +131,12 @@ defmodule AperDeskWeb.Graphql.Resolvers.DashboardResolver do
   end
 
   defp needs_attention(scope) do
-    overdue = Crm.overdue_leads(scope)
-    invoices = if Scope.tenant?(scope), do: Finance.overdue_invoices(scope), else: []
+    overdue = Helpers.ok_or(Crm.overdue_leads(scope), [])
+
+    invoices =
+      if Scope.tenant?(scope),
+        do: Helpers.ok_or(Finance.overdue_invoices(scope), []),
+        else: []
 
     Enum.map(overdue, fn lead ->
       %{

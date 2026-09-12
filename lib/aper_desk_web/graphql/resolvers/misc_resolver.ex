@@ -11,7 +11,10 @@ defmodule AperDeskWeb.Graphql.Resolvers.MiscResolver do
   alias AperDesk.Billing
   alias AperDesk.Billing.Plan
   alias AperDesk.Finance
+  alias AperDesk.Formats
   alias AperDesk.Money
+  alias AperDesk.People
+  alias AperDesk.People.LeaveRequest
   alias AperDesk.Scheduling
   alias AperDeskWeb.Graphql.Resolvers.Helpers
 
@@ -105,7 +108,7 @@ defmodule AperDeskWeb.Graphql.Resolvers.MiscResolver do
   def finance(_parent, %{month: month, year: year}, %{context: %{scope: scope}}) do
     with {:ok, invoices} <- Finance.list_invoices(scope, limit: 100),
          {:ok, payouts} <- Finance.list_payouts(scope) do
-      outstanding = Finance.outstanding_total(scope)
+      outstanding = Helpers.ok_or(Finance.outstanding_total(scope), Money.zero(scope.currency))
       _ = {month, year}
 
       {:ok,
@@ -201,11 +204,112 @@ defmodule AperDeskWeb.Graphql.Resolvers.MiscResolver do
                tags: tags_for(membership)
              }
            end),
-         leave_requests: [],
-         roster: [],
+         leave_requests: leave_requests(scope),
+         roster: roster(scope, members),
          contracts: contracts(members),
-         onboarding: []
+         onboarding: onboarding(scope)
        }}
+    end
+  end
+
+  # These three were returning `[]` while the schema promised them, which is a
+  # lie the client had no way to detect. They read the same contexts the web UI
+  # does, and fall back to empty for a role that may not see them — a
+  # photographer asking for the team gets people and no leave queue.
+  defp leave_requests(scope) do
+    scope
+    |> People.list_leave(status: "pending")
+    |> Helpers.ok_or([])
+    |> Enum.map(fn request ->
+      %{
+        id: request.id,
+        person: (request.user && request.user.name) || "Somebody",
+        dates: "#{request.starts_on} – #{request.ends_on}",
+        reason: request.reason,
+        detail: "#{String.capitalize(request.kind)} · #{LeaveRequest.days(request)} days",
+        tone: :warning
+      }
+    end)
+  end
+
+  defp onboarding(scope) do
+    scope
+    |> People.onboarding_in_progress()
+    |> Helpers.ok_or([])
+    |> Enum.map(fn row ->
+      %{
+        person: (row.membership.user && row.membership.user.name) || "Somebody",
+        day_label: "#{row.done} of #{row.total} done",
+        tasks:
+          Enum.map(row.tasks, fn task ->
+            %{label: task.label, done: not is_nil(task.done_at)}
+          end)
+      }
+    end)
+  end
+
+  # One row per active person, one cell per day of the current week, built from
+  # the assignments they are actually on — the same source the web roster uses,
+  # so the two cannot disagree.
+  defp roster(scope, members) do
+    today = Formats.today_for(scope)
+    start_day = Formats.week_start_day(scope)
+    from = Date.add(today, -rem(Date.day_of_week(today) - start_day + 7, 7))
+    days = Enum.map(0..6, &Date.add(from, &1))
+
+    assignments =
+      case Scheduling.calendar(
+             scope,
+             {to_datetime(scope, from), to_datetime(scope, Date.add(from, 7))}
+           ) do
+        {:ok, list} -> list
+        _ -> []
+      end
+
+    by_user = Enum.group_by(assignments, & &1.user_id)
+
+    members
+    |> Enum.filter(&(&1.status == "active"))
+    |> Enum.map(fn membership ->
+      %{
+        person: (membership.user && membership.user.name) || "Unknown",
+        days:
+          Enum.map(days, fn day ->
+            by_user
+            |> Map.get(membership.user_id, [])
+            |> Enum.filter(&covers?(&1, day, scope.time_zone))
+            |> roster_cell()
+          end)
+      }
+    end)
+  end
+
+  defp roster_cell([]), do: %{label: "free", kind: "free"}
+
+  defp roster_cell(assignments) do
+    if Enum.any?(assignments, &(&1.kind == "hold" and (&1.label || "") =~ "leave")) do
+      %{label: "away", kind: "x"}
+    else
+      first = hd(assignments)
+      %{label: (first.job && first.job.title) || first.label || "Booked", kind: "on"}
+    end
+  end
+
+  defp covers?(assignment, day, time_zone) do
+    {from, to} = assignment.period
+
+    with {:ok, day_start} <- DateTime.new(day, ~T[00:00:00], time_zone),
+         {:ok, day_end} <- DateTime.new(Date.add(day, 1), ~T[00:00:00], time_zone) do
+      DateTime.compare(from, day_end) == :lt and DateTime.compare(day_start, to) == :lt
+    else
+      _ -> false
+    end
+  end
+
+  defp to_datetime(scope, date) do
+    case DateTime.new(date, ~T[00:00:00], scope.time_zone) do
+      {:ok, datetime} -> datetime
+      _ -> DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
     end
   end
 

@@ -15,8 +15,8 @@ defmodule AperDeskWeb.Graphql.Resolvers.GalleryResolver do
 
   def get(_parent, %{id: id}, %{context: %{scope: scope}}) do
     with {:ok, gallery} <- Galleries.fetch_gallery(scope, id) do
-      media = Galleries.list_media(scope, gallery.id)
-      {:ok, favourites} = Galleries.list_selections(scope, gallery.id, "favourite")
+      media = Helpers.ok_or(Galleries.list_media(scope, gallery.id), [])
+      favourites = Helpers.ok_or(Galleries.list_selections(scope, gallery.id, "favourite"), [])
 
       favourite_counts = Enum.frequencies_by(favourites, & &1.media_id)
 
