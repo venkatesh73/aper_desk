@@ -16,6 +16,10 @@ defmodule AperDesk.Application do
       AperDesk.Repo,
       {DNSCluster, query: Application.get_env(:aper_desk, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: AperDesk.PubSub},
+      # Background work. After the Repo, because every queue and every plugin
+      # needs it; before the Endpoint, so a request cannot enqueue a job into a
+      # supervisor that has not started yet.
+      {Oban, Application.fetch_env!(:aper_desk, Oban)},
       # Start to serve requests, typically the last entry
       AperDeskWeb.Endpoint
     ]

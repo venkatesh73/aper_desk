@@ -42,6 +42,10 @@ defmodule AperDesk.Galleries.Gallery do
     field :archived_at, :utc_datetime_usec
     field :purge_after, :utc_datetime_usec
 
+    # Set by the reminder worker, never cast: it is a record of what the system
+    # did, not something a studio chooses.
+    field :expiry_notice_sent_at, :utc_datetime_usec
+
     field :download_enabled, :boolean, default: true
     field :download_limit, :integer
     field :download_count, :integer, default: 0

@@ -192,6 +192,21 @@ defmodule AperDesk.Galleries do
     end)
   end
 
+  @doc """
+  Mark a gallery purged once its files are gone.
+
+  Separate from deleting the objects because the two cannot be made atomic: the
+  storage delete is a network call and the row is a transaction. The files go
+  first, so a crash between them leaves a row saying "archived" pointing at
+  nothing — recoverable by running the purge again — rather than a row saying
+  "purged" while the studio is still billed for the bytes.
+  """
+  def mark_purged(%Gallery{} = gallery) do
+    gallery
+    |> Ecto.Changeset.change(status: "purged", purge_after: nil)
+    |> Repo.update()
+  end
+
   @doc "Galleries whose recovery window has also passed, ready for the purge worker."
   def purgeable(now \\ DateTime.utc_now()) do
     Repo.all(
