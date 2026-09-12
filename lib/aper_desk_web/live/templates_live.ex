@@ -47,6 +47,7 @@ defmodule AperDeskWeb.TemplatesLive do
     socket
     |> assign(page_title: "New #{label(kind)}")
     |> assign(kind: kind, record: nil)
+    |> assign(questions: [])
     |> assign(form: blank_form(kind))
   end
 
@@ -58,6 +59,7 @@ defmodule AperDeskWeb.TemplatesLive do
         socket
         |> assign(page_title: "Edit template")
         |> assign(kind: kind, record: record)
+        |> assign(questions: questions_of(record))
         |> assign(form: to_form(changeset(kind, record), as: :template))
 
       {:error, _reason} ->
@@ -77,17 +79,62 @@ defmodule AperDeskWeb.TemplatesLive do
   end
 
   def handle_event("validate", %{"template" => params}, socket) do
+    socket = maybe_track_questions(socket, params)
+
     changeset =
       socket.assigns.kind
-      |> changeset(socket.assigns.record, params)
+      |> changeset(socket.assigns.record, with_questions(params, socket))
       |> Map.put(:action, :validate)
 
     {:noreply, assign(socket, form: to_form(changeset, as: :template))}
   end
 
+  @doc false
+  def handle_event("add-question", _params, socket) do
+    next = %{
+      "key" => suggest_key(socket.assigns.questions),
+      "label" => "",
+      "type" => "text",
+      "required" => false,
+      "placeholder" => "",
+      "options" => ""
+    }
+
+    {:noreply, assign(socket, questions: socket.assigns.questions ++ [next])}
+  end
+
+  def handle_event("remove-question", %{"index" => index}, socket) do
+    index = String.to_integer(index)
+    {:noreply, assign(socket, questions: List.delete_at(socket.assigns.questions, index))}
+  end
+
+  # Moving a question changes the order the client is asked things in, which is
+  # the one part of a form's design that is not visible from the field list
+  # alone — so it is edited here rather than by retyping every label.
+  def handle_event("move-question", %{"index" => index, "by" => by}, socket) do
+    index = String.to_integer(index)
+    target = index + String.to_integer(by)
+    questions = socket.assigns.questions
+
+    if target in 0..(length(questions) - 1) do
+      moved = Enum.at(questions, index)
+
+      reordered =
+        questions
+        |> List.delete_at(index)
+        |> List.insert_at(target, moved)
+
+      {:noreply, assign(socket, questions: reordered)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_event("save", %{"template" => params}, socket) do
     scope = socket.assigns.current_scope
     kind = socket.assigns.kind
+    socket = maybe_track_questions(socket, params)
+    params = with_questions(params, socket)
 
     result =
       case socket.assigns.record do
@@ -193,6 +240,122 @@ defmodule AperDeskWeb.TemplatesLive do
 
   defp blank_form(kind), do: to_form(changeset(kind, nil), as: :template)
 
+  ## Questions
+
+  # The questions live in a `:map` column rather than as rows, so they are
+  # tracked in assigns and folded back into `fields` on the way to the
+  # changeset. Reading them from the changeset instead would lose every edit
+  # the moment a validation failed.
+  defp questions_of(%LeadCaptureForm{} = form) do
+    form
+    |> LeadCaptureForm.field_list()
+    |> Enum.map(fn field ->
+      %{
+        "key" => field["key"] || "",
+        "label" => field["label"] || "",
+        "type" => field["type"] || "text",
+        "required" => field["required"] in [true, "true"],
+        "placeholder" => field["placeholder"] || "",
+        "options" => field |> Map.get("options", []) |> options_to_text()
+      }
+    end)
+  end
+
+  defp questions_of(_record), do: []
+
+  defp options_to_text(options) when is_list(options), do: Enum.join(options, "\n")
+  defp options_to_text(options) when is_binary(options), do: options
+  defp options_to_text(_options), do: ""
+
+  # What the browser posted wins over what we were holding, so typing into a
+  # label survives the next keystroke's re-render.
+  defp maybe_track_questions(socket, %{"questions" => posted}) when is_map(posted) do
+    questions =
+      posted
+      |> Enum.sort_by(fn {index, _} -> String.to_integer(index) end)
+      |> Enum.map(fn {_index, question} ->
+        %{
+          "key" => question["key"] || "",
+          "label" => question["label"] || "",
+          "type" => question["type"] || "text",
+          "required" => question["required"] in ["true", true, "on"],
+          "placeholder" => question["placeholder"] || "",
+          "options" => question["options"] || ""
+        }
+      end)
+
+    assign(socket, questions: questions)
+  end
+
+  defp maybe_track_questions(socket, _params), do: socket
+
+  defp with_questions(params, %{assigns: %{kind: "questionnaire", questions: questions}}) do
+    fields =
+      questions
+      |> Enum.reject(&(String.trim(&1["label"]) == ""))
+      |> Enum.map(fn question ->
+        base = %{
+          "key" => key_for(question),
+          "label" => String.trim(question["label"]),
+          "type" => question["type"],
+          "required" => question["required"] == true
+        }
+
+        base
+        |> put_unless_blank("placeholder", question["placeholder"])
+        |> put_options(question)
+      end)
+
+    Map.put(params, "fields", %{"fields" => fields})
+  end
+
+  defp with_questions(params, _socket), do: params
+
+  # A key is what a submission arrives under, so it has to be stable and
+  # machine-safe. Derived from the label only when the author has not set one,
+  # because renaming a question must not orphan the answers already collected
+  # under the old key.
+  defp key_for(%{"key" => key} = question) do
+    case String.trim(key || "") do
+      "" -> slugify(question["label"])
+      existing -> existing
+    end
+  end
+
+  defp slugify(label) do
+    label
+    |> to_string()
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "_")
+    |> String.trim("_")
+    |> then(fn slug -> if slug == "", do: "question", else: slug end)
+  end
+
+  defp suggest_key(questions), do: "question_#{length(questions) + 1}"
+
+  defp put_unless_blank(map, _key, value) when value in [nil, ""], do: map
+
+  defp put_unless_blank(map, key, value) do
+    case String.trim(value) do
+      "" -> map
+      trimmed -> Map.put(map, key, trimmed)
+    end
+  end
+
+  defp put_options(map, %{"type" => "select"} = question) do
+    options =
+      question
+      |> Map.get("options", "")
+      |> to_string()
+      |> String.split(~r/\r?\n/)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    if options == [], do: map, else: Map.put(map, "options", options)
+  end
+
+  defp put_options(map, _question), do: map
+
   ## Preview
 
   # Rendered against sample values rather than blanks. A preview full of empty
@@ -264,6 +427,24 @@ defmodule AperDeskWeb.TemplatesLive do
   `{{whatever}}` in a client's inbox.
   """
   def tokens, do: Templating.tokens()
+
+  @doc "The question types a form may ask, as the author would name them."
+  def question_types do
+    [
+      {"Short text", "text"},
+      {"Long text", "textarea"},
+      {"Email", "email"},
+      {"Phone", "phone"},
+      {"Date", "date"},
+      {"A choice", "select"},
+      {"Yes or no", "checkbox"},
+      {"Number", "number"}
+    ]
+  end
+
+  @doc "Whether this type needs a list of choices spelling out."
+  def needs_options?("select"), do: true
+  def needs_options?(_type), do: false
 
   @doc "A questionnaire field's input type, mapped to what the browser calls it."
   def input_type("textarea"), do: "textarea"

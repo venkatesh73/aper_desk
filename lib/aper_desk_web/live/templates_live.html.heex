@@ -246,9 +246,121 @@
                 field={@form[:success_message]}
                 label="Thank-you message"
                 rows={2}
-                hint="Questions are added on the form's own page once it exists."
               />
             </.section>
+
+            <div :if={@kind == "questionnaire"} class="sect">
+              <div class="sect-head with-action">
+                <h3>The questions</h3>
+                <span class="spacer"></span>
+                <button type="button" class="btn sm" phx-click="add-question">
+                  + Add a question
+                </button>
+              </div>
+
+              <div :for={{question, index} <- Enum.with_index(@questions)} class="qrow">
+                <div class="qrow-head">
+                  <span class="qnum">{index + 1}</span>
+                  <input
+                    type="text"
+                    name={"template[questions][#{index}][label]"}
+                    value={question["label"]}
+                    placeholder="What are you asking?"
+                    class="qlabel"
+                  />
+                  <select name={"template[questions][#{index}][type]"} class="qtype">
+                    <option
+                      :for={{label, value} <- question_types()}
+                      value={value}
+                      selected={value == question["type"]}
+                    >
+                      {label}
+                    </option>
+                  </select>
+
+                  <button
+                    type="button"
+                    class="btn icon ghost sm"
+                    phx-click="move-question"
+                    phx-value-index={index}
+                    phx-value-by="-1"
+                    disabled={index == 0}
+                    title="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    class="btn icon ghost sm"
+                    phx-click="move-question"
+                    phx-value-index={index}
+                    phx-value-by="1"
+                    disabled={index == length(@questions) - 1}
+                    title="Move down"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    class="btn icon ghost sm"
+                    phx-click="remove-question"
+                    phx-value-index={index}
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div class="qrow-body">
+                  <label class="checkfield">
+                    <input
+                      type="hidden"
+                      name={"template[questions][#{index}][required]"}
+                      value="false"
+                    />
+                    <input
+                      type="checkbox"
+                      name={"template[questions][#{index}][required]"}
+                      value="true"
+                      checked={question["required"]}
+                    />
+                    <span>They have to answer it</span>
+                  </label>
+
+                  <input
+                    type="text"
+                    name={"template[questions][#{index}][placeholder]"}
+                    value={question["placeholder"]}
+                    placeholder="Hint text (optional)"
+                  />
+
+                  <input
+                    type="hidden"
+                    name={"template[questions][#{index}][key]"}
+                    value={question["key"]}
+                  />
+                </div>
+
+                <div :if={needs_options?(question["type"])} class="qrow-body">
+                  <textarea
+                    name={"template[questions][#{index}][options]"}
+                    rows="3"
+                    placeholder="One choice per line"
+                  >{question["options"]}</textarea>
+                </div>
+              </div>
+
+              <p :if={@questions == []} style="color:var(--muted);font-size:13px;margin:0">
+                No questions yet. A form with none collects an email address and nothing else —
+                add the things you actually need to know before quoting.
+              </p>
+
+              <p style="color:var(--faint);font-size:11.5px;margin:8px 0 0">
+                Answers arrive under the question's key, which is set from the label the first
+                time and then left alone — renaming a question does not orphan the answers
+                already collected under it.
+              </p>
+            </div>
 
             <.section :if={@kind in ["email", "contract"]} title="When to offer it">
               <.combo_field

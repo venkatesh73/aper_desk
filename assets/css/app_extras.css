@@ -395,3 +395,32 @@ input.invalid,select.invalid,textarea.invalid{border-color:var(--bad)}
 /* design.css styles ok and warn fills but not bad. A meter that is over its
    limit is exactly the one that has to look wrong. */
 .prog .bar i.bad { background: var(--bad); }
+
+/* ===== questionnaire editor =====
+   One block per question: what is asked on the top row, how it behaves
+   underneath. A flat list of inputs makes it impossible to see where one
+   question ends and the next begins. */
+.qrow {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel);
+}
+.qrow + .qrow { margin-top: 8px; }
+.qrow-head { display: flex; align-items: center; gap: 6px; }
+.qrow-head .qnum {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--faint);
+  width: 18px;
+  flex: none;
+}
+.qrow-head .qlabel { flex: 1; min-width: 0; font-weight: 600; }
+.qrow-head .qtype { width: auto; flex: none; padding: 6px 8px; font-size: 12.5px; }
+.qrow-body { display: flex; align-items: center; gap: 10px; padding-left: 24px; }
+.qrow-body input[type="text"] { flex: 1; min-width: 0; }
+.qrow-body textarea { flex: 1; }
+.qrow-body .checkfield { flex: none; white-space: nowrap; }
