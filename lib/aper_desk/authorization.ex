@@ -29,6 +29,7 @@ defmodule AperDesk.Authorization do
       gallery.read gallery.write contact.read contact.write
       quote.read package.read comms.read comms.write
       workflow.read directory.read directory.write review.read
+      leave.read leave.write gear.read
     )a,
     finance: ~w(
       studio.read
@@ -42,6 +43,8 @@ defmodule AperDesk.Authorization do
       member.read member.write invitation.read invitation.write
       assignment.read assignment.write payout.read
       job.read report.read
+      leave.read leave.write leave.approve
+      onboarding.read onboarding.write
     )a,
     ops: ~w(
       studio.read
@@ -50,6 +53,7 @@ defmodule AperDesk.Authorization do
       package.read package.write quote.read quote.write contract.read contract.write
       comms.read comms.write workflow.read workflow.write form.read form.write
       report.read directory.read
+      gear.read gear.write leave.read
     )a
   }
 
