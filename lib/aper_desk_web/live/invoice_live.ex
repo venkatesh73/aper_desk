@@ -19,7 +19,7 @@ defmodule AperDeskWeb.InvoiceLive do
 
   alias AperDesk.Crm
   alias AperDesk.Finance
-  alias AperDesk.Finance.Invoice
+  alias AperDesk.Finance.{Invoice, InvoiceTemplate}
   alias AperDesk.Formats
   alias AperDesk.Money
 
@@ -35,12 +35,14 @@ defmodule AperDeskWeb.InvoiceLive do
 
   defp apply_action(socket, :new, _params) do
     scope = socket.assigns.current_scope
+    blank = %Invoice{currency: scope.currency, line_items: []}
 
     socket
     |> assign(page_title: "New invoice")
-    |> assign(invoice: %Invoice{currency: scope.currency, line_items: []})
+    |> assign(invoice: blank)
     |> assign(contacts: contacts(scope))
-    |> assign_form(Invoice.changeset(%Invoice{currency: scope.currency, line_items: []}, %{}))
+    |> assign(templates: templates(scope))
+    |> assign_form(Invoice.changeset(blank, %{}))
   end
 
   defp apply_action(socket, :show, %{"id" => id}) do
@@ -52,6 +54,7 @@ defmodule AperDeskWeb.InvoiceLive do
         |> assign(page_title: invoice.reference || "Invoice")
         |> assign(invoice: invoice)
         |> assign(contacts: contacts(scope))
+        |> assign(templates: templates(scope))
         |> assign_form(Invoice.changeset(invoice, %{}))
 
       _ ->
@@ -110,6 +113,33 @@ defmodule AperDeskWeb.InvoiceLive do
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, "Could not save: #{inspect(reason)}")}
         end
+    end
+  end
+
+  @doc false
+  # Fills in terms rather than replacing the invoice: whatever has already been
+  # typed into the lines stays, because a studio picking a template halfway
+  # through pricing meant "use these terms", not "start again".
+  def handle_event("use-template", %{"id" => ""}, socket), do: {:noreply, socket}
+
+  def handle_event("use-template", %{"id" => id}, socket) do
+    scope = socket.assigns.current_scope
+
+    case Finance.fetch_invoice_template(scope, id) do
+      {:ok, template} ->
+        params =
+          socket
+          |> current_params()
+          |> Map.merge(InvoiceTemplate.to_invoice_attrs(template, Formats.today_for(scope)))
+          |> put_tax(template, socket)
+
+        {:noreply,
+         socket
+         |> rebuild(params)
+         |> put_flash(:info, "#{template.name} applied.")}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "That template is not here.")}
     end
   end
 
@@ -196,6 +226,41 @@ defmodule AperDeskWeb.InvoiceLive do
   end
 
   ## Internals
+
+  # Tax is a rate on the template and an amount on the invoice, so it is worked
+  # out against whatever the lines currently come to — applying a template
+  # before pricing and after must not give different answers.
+  defp put_tax(params, template, socket) do
+    currency = params["currency"] || socket.assigns.invoice.currency
+    subtotal = subtotal_of(params, socket)
+    cents = InvoiceTemplate.tax_on(template, subtotal, currency)
+
+    params
+    |> Map.put("tax_cents", cents)
+    |> Map.put("tax_major", Money.to_major(cents, currency))
+  end
+
+  defp subtotal_of(params, socket) do
+    currency = params["currency"] || socket.assigns.invoice.currency
+
+    params
+    |> Map.get("line_items", %{})
+    |> Enum.reduce(0, fn {_index, line}, total ->
+      quantity =
+        case Decimal.parse(to_string(line["quantity"] || "1")) do
+          {decimal, _} -> decimal
+          :error -> Decimal.new(1)
+        end
+
+      unit = Money.from_major(line["unit_price_major"], currency)
+
+      total +
+        (unit
+         |> Money.new(currency)
+         |> Money.multiply(quantity)
+         |> Map.fetch!(:amount))
+    end)
+  end
 
   defp paid_message(%Invoice{status: "paid"}), do: "Paid in full."
 
@@ -293,6 +358,13 @@ defmodule AperDeskWeb.InvoiceLive do
     end
   end
 
+  defp templates(scope) do
+    case Finance.list_invoice_templates(scope) do
+      {:ok, templates} -> templates
+      _ -> []
+    end
+  end
+
   defp contacts(scope) do
     case Crm.list_contacts(scope, limit: 200) do
       {:ok, contacts} -> contacts
@@ -334,4 +406,7 @@ defmodule AperDeskWeb.InvoiceLive do
   @doc "What is left to pay, as the amount field's starting value."
   def suggested_payment(%Invoice{} = invoice),
     do: Money.to_major(outstanding_cents(invoice), invoice.currency)
+
+  def template_options(templates),
+    do: Enum.map(templates, &{&1.name <> if(&1.is_default, do: " · default", else: ""), &1.id})
 end

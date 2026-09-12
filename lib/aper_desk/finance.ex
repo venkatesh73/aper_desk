@@ -27,6 +27,7 @@ defmodule AperDesk.Finance do
   alias AperDesk.Authorization
   alias AperDesk.Events
   alias AperDesk.Finance.{Expense, FxRate, Invoice, Payment, Payout}
+  alias AperDesk.Finance.InvoiceTemplate
   alias AperDesk.Money
   alias AperDesk.Repo
   alias AperDesk.Scope
@@ -120,6 +121,102 @@ defmodule AperDesk.Finance do
       |> Events.record(:invoice, "invoice.sent", "Invoice sent to client", scope)
       |> Repo.transaction()
       |> unwrap(:invoice)
+    end
+  end
+
+  ## Invoice templates
+
+  def list_invoice_templates(%Scope{} = scope, opts \\ []) do
+    with :ok <- Authorization.authorize(scope, :"invoice.read") do
+      {:ok,
+       InvoiceTemplate
+       |> Scoped.for_studio(scope)
+       |> then(fn q ->
+         if Keyword.get(opts, :include_archived, false),
+           do: q,
+           else: where(q, [t], is_nil(t.archived_at))
+       end)
+       |> order_by([t], desc: t.is_default, asc: t.name)
+       |> Repo.all()}
+    end
+  end
+
+  def fetch_invoice_template(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"invoice.read") do
+      Scoped.fetch(InvoiceTemplate, scope, id)
+    end
+  end
+
+  @doc """
+  Create a template, clearing any other default if this one claims it.
+
+  Both writes share a transaction, because the unique index refuses two
+  defaults and an unguarded insert would simply fail rather than doing the
+  obvious thing — a studio ticking "use this one by default" means it, and
+  should not have to go and untick the old one first.
+  """
+  def create_invoice_template(%Scope{} = scope, attrs) do
+    with :ok <- Authorization.authorize(scope, :"invoice.write") do
+      Multi.new()
+      |> demote_existing_default(scope, attrs)
+      |> Multi.insert(
+        :template,
+        InvoiceTemplate.changeset(%InvoiceTemplate{}, Scoped.put_studio(attrs, scope))
+      )
+      |> Repo.transaction()
+      |> unwrap(:template)
+    end
+  end
+
+  def update_invoice_template(%Scope{} = scope, id, attrs) do
+    with :ok <- Authorization.authorize(scope, :"invoice.write"),
+         {:ok, template} <- Scoped.fetch(InvoiceTemplate, scope, id) do
+      Multi.new()
+      |> demote_existing_default(scope, attrs, template.id)
+      |> Multi.update(:template, InvoiceTemplate.changeset(template, attrs))
+      |> Repo.transaction()
+      |> unwrap(:template)
+    end
+  end
+
+  @doc "Retire a template. Invoices raised from it are untouched."
+  def archive_invoice_template(%Scope{} = scope, id) do
+    with :ok <- Authorization.authorize(scope, :"invoice.write"),
+         {:ok, template} <- Scoped.fetch(InvoiceTemplate, scope, id) do
+      template |> InvoiceTemplate.archive_changeset() |> Repo.update()
+    end
+  end
+
+  @doc """
+  The template to reach for, given a shoot type.
+
+  A template matching the shoot type beats the studio's default, because a
+  studio that has written terms specifically for weddings meant them to apply
+  to weddings.
+  """
+  def default_invoice_template(%Scope{} = scope, shoot_type \\ nil) do
+    with {:ok, templates} <- list_invoice_templates(scope) do
+      {:ok,
+       Enum.find(templates, &(shoot_type && &1.shoot_type == shoot_type)) ||
+         Enum.find(templates, & &1.is_default)}
+    end
+  end
+
+  defp demote_existing_default(multi, scope, attrs, keep_id \\ nil) do
+    if attrs["is_default"] in [true, "true"] do
+      Multi.update_all(
+        multi,
+        :demote,
+        fn _changes ->
+          InvoiceTemplate
+          |> Scoped.for_studio(scope)
+          |> where([t], t.is_default)
+          |> then(fn q -> if keep_id, do: where(q, [t], t.id != ^keep_id), else: q end)
+        end,
+        set: [is_default: false]
+      )
+    else
+      multi
     end
   end
 

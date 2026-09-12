@@ -4,7 +4,6 @@ defmodule AperDesk.PeopleTest do
   import AperDesk.Fixtures
 
   alias AperDesk.{Accounts, People, Repo, Scheduling}
-  alias AperDesk.People.LeaveRequest
 
   setup do
     %{studio: studio, scope: owner} = studio_fixture()

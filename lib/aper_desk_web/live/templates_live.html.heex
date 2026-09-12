@@ -177,6 +177,66 @@
                 </tbody>
               </table>
             </div>
+          <% "invoice" -> %>
+            <div :if={@invoice_templates != []} class="tablewrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Raised as</th>
+                    <th>Due</th>
+                    <th>Tax</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={template <- @invoice_templates}>
+                    <td>
+                      <span class="name">{template.name}</span>
+                      <span :if={template.is_default} class="pill ok">default</span>
+                      <span :if={template.shoot_type} class="pill">
+                        {humanise(template.shoot_type)}
+                      </span>
+                    </td>
+                    <td>{humanise(template.kind)}</td>
+                    <td>{due_line(template)}</td>
+                    <td class="mono">
+                      {if template.tax_bps > 0,
+                        do: "#{tax_percent_value(template)}%",
+                        else: "—"}
+                    </td>
+                    <td style="text-align:right">
+                      <button
+                        class="btn sm"
+                        phx-click="preview"
+                        phx-value-kind="invoice"
+                        phx-value-id={template.id}
+                      >
+                        Preview
+                      </button>
+                      <a class="btn sm" href={~p"/app/templates/invoice/#{template}/edit"}>
+                        Edit
+                      </a>
+                      <button
+                        class="btn sm ghost"
+                        phx-click="archive"
+                        phx-value-kind="invoice"
+                        phx-value-id={template.id}
+                        data-confirm="Archive this template? Invoices already raised from it are untouched."
+                      >
+                        Archive
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <.empty
+              :if={@invoice_templates == []}
+              title="No invoice templates yet"
+              body="Terms you write once — when it is due, what tax applies, how to pay — and reach for whenever you raise an invoice."
+            />
         <% end %>
       <% else %>
         <.topbar
@@ -362,7 +422,67 @@
               </p>
             </div>
 
-            <.section :if={@kind in ["email", "contract"]} title="When to offer it">
+            <.section :if={@kind == "invoice"} title="How it is raised">
+              <.row layout="two">
+                <.select_field field={@form[:kind]} label="Raised as" options={invoice_kinds()} />
+                <.text_field
+                  field={@form[:due_in_days]}
+                  label="Due, in days"
+                  type="number"
+                  min="0"
+                  hint="Counted from the day it is issued."
+                />
+              </.row>
+
+              <.row layout="two">
+                <.field label="Tax rate" hint="A percentage — 23 for VAT at 23%.">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    name="template[tax_percent]"
+                    value={@form.params["tax_percent"] || tax_percent_value(@form.source.data)}
+                  />
+                </.field>
+                <.text_field
+                  field={@form[:tax_label]}
+                  label="What to call it"
+                  placeholder="VAT"
+                />
+              </.row>
+
+              <.text_field
+                :if={@form[:kind].value == "deposit"}
+                field={@form[:deposit_percent]}
+                label="Deposit percentage"
+                type="number"
+                min="0"
+                max="100"
+                hint="The share of the total asked for up front."
+              />
+
+              <.textarea_field
+                field={@form[:notes]}
+                label="Notes on the invoice"
+                rows={3}
+                placeholder="The date is held once the deposit clears."
+              />
+              <.textarea_field
+                field={@form[:payment_instructions]}
+                label="How to pay"
+                rows={3}
+                placeholder="Bank transfer to …"
+              />
+
+              <.checkbox_field
+                field={@form[:is_default]}
+                label="Reach for this one by default"
+                hint="A template matching the shoot type is preferred over the default."
+              />
+            </.section>
+
+            <.section :if={@kind in ["email", "contract", "invoice"]} title="When to offer it">
               <.combo_field
                 id="template-shoot-type"
                 field={@form[:shoot_type]}
@@ -423,6 +543,44 @@
                 <span>Signed</span>
                 <span>Date</span>
               </div>
+            </div>
+          <% "invoice" -> %>
+            <div class="docprev">
+              <h2>Invoice</h2>
+              <p class="docprev-meta">
+                From <b>{@preview.studio}</b> to <b>{@preview.client}</b> ·
+                issued {@preview.issued_on} · due {@preview.due_on}
+              </p>
+
+              <div class="kv" style="margin-bottom:12px">
+                <span>Subtotal</span>
+                <span>{@preview.subtotal}</span>
+                <span :if={@preview.tax_percent > 0}>
+                  {@preview.tax_label} at {@preview.tax_percent}%
+                </span>
+                <span :if={@preview.tax_percent > 0}>{@preview.tax}</span>
+              </div>
+
+              <div class="kv" style="font-size:17px;font-weight:700">
+                <span style="color:var(--faint);font-weight:400">Total</span>
+                <span>{@preview.total}</span>
+              </div>
+
+              <div :if={@preview.notes} class="docprev-body" style="margin-top:14px">
+                {@preview.notes}
+              </div>
+
+              <div :if={@preview.payment_instructions} class="hint">
+                <b>How to pay</b>
+                <span style="display:block;margin-top:2px;white-space:pre-wrap">
+                  {@preview.payment_instructions}
+                </span>
+              </div>
+
+              <p style="color:var(--faint);font-size:11.5px;margin-top:12px">
+                Shown against a {@preview.subtotal} shoot, so the tax and the total are the real
+                arithmetic rather than placeholders.
+              </p>
             </div>
           <% _questionnaire -> %>
             <div class="formprev">

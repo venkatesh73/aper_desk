@@ -19,12 +19,16 @@ defmodule AperDeskWeb.TemplatesLive do
 
   alias AperDesk.Comms
   alias AperDesk.Comms.{EmailTemplate, LeadCaptureForm}
+  alias AperDesk.Finance
+  alias AperDesk.Finance.InvoiceTemplate
   alias AperDesk.Crm.Lead
+  alias AperDesk.Formats
+  alias AperDesk.Money
   alias AperDesk.Sales
   alias AperDesk.Sales.ContractTemplate
   alias AperDesk.Templating
 
-  @tabs ~w(email contract questionnaire)
+  @tabs ~w(email contract questionnaire invoice)
 
   @impl true
   def mount(_params, _session, socket),
@@ -83,7 +87,7 @@ defmodule AperDeskWeb.TemplatesLive do
 
     changeset =
       socket.assigns.kind
-      |> changeset(socket.assigns.record, with_questions(params, socket))
+      |> changeset(socket.assigns.record, params |> with_questions(socket) |> with_tax_bps())
       |> Map.put(:action, :validate)
 
     {:noreply, assign(socket, form: to_form(changeset, as: :template))}
@@ -134,7 +138,7 @@ defmodule AperDeskWeb.TemplatesLive do
     scope = socket.assigns.current_scope
     kind = socket.assigns.kind
     socket = maybe_track_questions(socket, params)
-    params = with_questions(params, socket)
+    params = params |> with_questions(socket) |> with_tax_bps()
 
     result =
       case socket.assigns.record do
@@ -193,6 +197,7 @@ defmodule AperDeskWeb.TemplatesLive do
         "email" -> Comms.archive_template(scope, id)
         "contract" -> Sales.archive_template(scope, id)
         "questionnaire" -> Comms.update_form(scope, id, %{"active" => false})
+        "invoice" -> Finance.archive_invoice_template(scope, id)
       end
 
     case result do
@@ -213,19 +218,28 @@ defmodule AperDeskWeb.TemplatesLive do
     |> assign(email_templates: Comms.list_templates(scope))
     |> assign(contract_templates: Sales.list_templates(scope))
     |> assign(forms: Comms.list_forms(scope))
+    |> assign(invoice_templates: ok_or(Finance.list_invoice_templates(scope), []))
   end
+
+  defp ok_or({:ok, value}, _fallback), do: value
+  defp ok_or(_error, fallback), do: fallback
 
   defp fetch(scope, "email", id), do: Comms.fetch_template(scope, id)
   defp fetch(scope, "contract", id), do: Sales.fetch_template(scope, id)
   defp fetch(scope, "questionnaire", id), do: Comms.fetch_form(scope, id)
+  defp fetch(scope, "invoice", id), do: Finance.fetch_invoice_template(scope, id)
 
   defp create(scope, "email", params), do: Comms.create_template(scope, params)
   defp create(scope, "contract", params), do: Sales.create_template(scope, params)
   defp create(scope, "questionnaire", params), do: Comms.create_form(scope, params)
+  defp create(scope, "invoice", params), do: Finance.create_invoice_template(scope, params)
 
   defp update(scope, "email", id, params), do: Comms.update_template(scope, id, params)
   defp update(scope, "contract", id, params), do: Sales.update_template(scope, id, params)
   defp update(scope, "questionnaire", id, params), do: Comms.update_form(scope, id, params)
+
+  defp update(scope, "invoice", id, params),
+    do: Finance.update_invoice_template(scope, id, params)
 
   defp changeset(kind, record, params \\ %{})
 
@@ -237,6 +251,9 @@ defmodule AperDeskWeb.TemplatesLive do
 
   defp changeset("questionnaire", record, params),
     do: Comms.change_form(record || %LeadCaptureForm{}, params)
+
+  defp changeset("invoice", record, params),
+    do: InvoiceTemplate.changeset(record || %InvoiceTemplate{}, params)
 
   defp blank_form(kind), do: to_form(changeset(kind, nil), as: :template)
 
@@ -310,6 +327,20 @@ defmodule AperDeskWeb.TemplatesLive do
   end
 
   defp with_questions(params, _socket), do: params
+
+  # A studio types 23, not 2300. The conversion happens once, here; everything
+  # below this line is basis points, for the same reason money is integers.
+  defp with_tax_bps(%{"tax_percent" => percent} = params) do
+    bps =
+      case Float.parse(to_string(percent)) do
+        {value, _rest} -> round(value * 100)
+        :error -> 0
+      end
+
+    Map.put(params, "tax_bps", bps)
+  end
+
+  defp with_tax_bps(params), do: params
 
   # A key is what a submission arrives under, so it has to be stable and
   # machine-safe. Derived from the label only when the author has not set one,
@@ -390,6 +421,30 @@ defmodule AperDeskWeb.TemplatesLive do
     }
   end
 
+  defp preview(socket, "invoice", %InvoiceTemplate{} = template) do
+    scope = socket.assigns.current_scope
+    today = Formats.today_for(scope)
+    subtotal = 450_000
+
+    %{
+      kind: "invoice",
+      title: template.name || "Untitled template",
+      client: "Anna Bell",
+      studio: (scope.studio && scope.studio.name) || "Your studio",
+      issued_on: Formats.date(scope, today),
+      due_on: Formats.date(scope, Date.add(today, template.due_in_days || 0)),
+      due_in_days: template.due_in_days || 0,
+      subtotal: money(scope, subtotal),
+      tax_label: template.tax_label || "Tax",
+      tax_percent: InvoiceTemplate.tax_percent(template),
+      tax: money(scope, InvoiceTemplate.tax_on(template, subtotal, scope.currency)),
+      total: money(scope, subtotal + InvoiceTemplate.tax_on(template, subtotal, scope.currency)),
+      deposit_percent: template.deposit_percent,
+      notes: template.notes,
+      payment_instructions: template.payment_instructions
+    }
+  end
+
   defp preview(_socket, "questionnaire", %LeadCaptureForm{} = form) do
     %{
       kind: "questionnaire",
@@ -408,10 +463,12 @@ defmodule AperDeskWeb.TemplatesLive do
   def label("email"), do: "email template"
   def label("contract"), do: "contract template"
   def label("questionnaire"), do: "questionnaire"
+  def label("invoice"), do: "invoice template"
 
   def tab_label("email"), do: "Email"
   def tab_label("contract"), do: "Contracts"
   def tab_label("questionnaire"), do: "Questionnaires"
+  def tab_label("invoice"), do: "Invoices"
 
   def shoot_types, do: ["" | Lead.shoot_types()]
 
@@ -427,6 +484,25 @@ defmodule AperDeskWeb.TemplatesLive do
   `{{whatever}}` in a client's inbox.
   """
   def tokens, do: Templating.tokens()
+
+  defp money(scope, cents),
+    do: cents |> Money.new(scope.currency) |> Money.to_string()
+
+  @doc "The kinds an invoice template can be raised as."
+  def invoice_kinds,
+    do:
+      Enum.map(AperDesk.Finance.Invoice.kinds(), fn kind ->
+        {kind |> String.replace("_", " ") |> String.capitalize(), kind}
+      end)
+
+  @doc "A tax rate in basis points, shown and typed as a percentage."
+  def tax_percent_value(%InvoiceTemplate{tax_bps: bps}) when is_integer(bps), do: bps / 100
+  def tax_percent_value(_template), do: 0
+
+  @doc "Whether this template fills the due date in from a count of days."
+  def due_line(%InvoiceTemplate{due_in_days: 0}), do: "Due the day it is issued"
+  def due_line(%InvoiceTemplate{due_in_days: 1}), do: "Due the next day"
+  def due_line(%InvoiceTemplate{due_in_days: days}), do: "Due #{days} days after issue"
 
   @doc "The question types a form may ask, as the author would name them."
   def question_types do
