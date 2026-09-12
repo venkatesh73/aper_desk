@@ -572,6 +572,9 @@
 
               <div :if={@preview.payment_instructions} class="hint">
                 <b>How to pay</b>
+                <%!-- On one line: `pre-wrap` preserves the template's own
+                indentation, so a tidy heex block renders as a text block
+                pushed halfway across the panel. --%>
                 <span style="display:block;margin-top:2px;white-space:pre-wrap">
                   {@preview.payment_instructions}
                 </span>
